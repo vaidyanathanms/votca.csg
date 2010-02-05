@@ -18,30 +18,18 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script implemtents the function initialize
-for the Inverse Boltzmann Method
+This script initizalizes potentials in a generic way
 
 Usage: ${0##*/}
 
-USES: do_external csg_get_interaction_property log run_or_exit csg_resample log
+USES:  die msg csg_get_property for_all do_external
 
-NEEDS: name min max step
+NEEDS: cg.inverse.method
 EOF
-  exit 0
+   exit 0
 fi
 
 check_deps "$0"
 
-name=$(csg_get_interaction_property name)
-if [ -f ../${name}.pot.in ]; then
-  msg "Using given table ${name}.pot.in for ${name}"
-  min=$(csg_get_interaction_property min )
-  max=$(csg_get_interaction_property max )
-  step=$(csg_get_interaction_property step )
-  run_or_exit csg_resample --in ../${name}.pot.in --out ${name}.pot.new --grid ${min}:${step}:${max}
-else
-  # RDF_to_POT.pl just does log g(r) + extrapolation
-  msg "Using intial guess from RDF for ${name}"
-  run_or_exit do_external rdf pot ${name}.dist.tgt ${name}.pot.new
-fi
-
+method="$(csg_get_property cg.inverse.method)"
+for_all non-bonded do_external init_single $method

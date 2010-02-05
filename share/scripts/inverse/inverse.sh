@@ -19,6 +19,7 @@
 usage="Usage: ${0##*/} [OPTIONS] setting_file.xml"
 do_iterations=""
 clean="no"
+wall_time=""
 
 show_help () {
   cat << eof
@@ -31,14 +32,15 @@ $usage
 
 Allowed options:
 -h, --help                    show this help
--N, --do-iterations N         only do N iterationso
+-N, --do-iterations N         only do N iterations
+    --wall-time SEK           Set wall clock time
     --clean                   clean out the PWD, dangerous
 
 Examples:
 * ${0##*/} cg.xml
 * ${0##*/} -6 cg.xml
 
-USES: csg_get_property date \$SOURCE_WRAPPER msg mkdir for_all do_external mark_done cp die is_done log run_or_exit csg_get_interaction_property date \$CSGLOG
+USES: csg_get_property date \$SOURCE_WRAPPER msg mkdir for_all do_external mark_done cp die is_done log run_or_exit csg_get_interaction_property date \$CSGLOG date
 
 NEEDS: cg.inverse.method cg.inverse.program cg.inverse.iterations_max cg.inverse.filelist name
 eof
@@ -57,7 +59,11 @@ while [ "${1#-}" != "$1" ]; do
  fi
  case $1 in 
    --do-iterations)
-    do_iterations=$2
+    do_iterations="$2"
+    shift 2 ;;
+   --wall-time)
+    wall_time="$2"
+    start_time="$(date +%s)" || exit 1
     shift 2 ;;
    -[0-9]*)
     do_iterations=${1#-}
@@ -87,9 +93,9 @@ if [ -f "$CSGLOG" ]; then
   log "# Appending to existing logfile #"
   log "#################################\n\n"
   log "Sim started $(date)"
-  echo "Appending to existing logfile $CSGLOG"
+  echo "Appending to existing logfile ${CSGLOG##*/}"
 else
-  echo For a more verbose log see: $CSGLOG
+  echo "For a more verbose log see: ${CSGLOG##*/}"
   #log is created in the next line
   echo "Sim started $(date)" > $CSGLOG || exit 1
 fi
@@ -109,8 +115,11 @@ source $($SOURCE_WRAPPER functions $sim_prog) || die "$SOURCE_WRAPPER functions 
 iterations="$(csg_get_property cg.inverse.iterations_max)" 
 log "We are doing $iterations iterations."
 
-filelist="$(csg_get_property cg.inverse.filelist)"  
-log "We extra need $filelist to run the simulation"
+filelist="$(csg_get_property --allow-empty cg.inverse.filelist)"
+[ -z "$filelist" ] || log "We extra cp '$filelist' to every step to run the simulation"
+
+cleanlist="$(csg_get_property --allow-empty cg.inverse.cleanlist)"
+[ -z "$cleanlist" ] || log "We extra clean '$cleanlist' after a step is done"
 
 run_or_exit $SOURCE_WRAPPER --status
 run_or_exit $SOURCE_WRAPPER --check
@@ -125,16 +134,16 @@ if [ -d "$this_dir" ]; then
   [[ -f $this_dir/done ]] || die "Incomplete step 0"
 else
   msg ------------------------
-  msg "Prepare (make $this_dir)"
+  msg "Prepare (dir ${this_dir##*/})"
   msg ------------------------
   mkdir -p $this_dir || die "mkdir -p $this_dir failed"
 
   cd $this_dir || die "cd $this_dir failed"
 
   #copy+resample all rdf in $this_dir
-  for_all non-bonded do_external resample calc ..
+  for_all non-bonded do_external resample calc
 
-  for_all "non-bonded" do_external init $method  
+  do_external init $method
 
   #get confout.gro
   do_external init $sim_prog 
@@ -145,12 +154,15 @@ else
   cd ..
 fi
 
+avg_steptime=0
+steps_done=0
 for ((i=1;i<$iterations+1;i++)); do
+  step_starttime="$(get_time)"
   update_stepnames $i
   last_dir=$(get_last_step_dir)
   this_dir=$(get_current_step_dir --no-check)
   msg -------------------------------
-  msg "Doing iteration $i (make $this_dir)"
+  msg "Doing iteration $i (dir ${this_dir##*/})"
   msg -------------------------------
   if [ -d $this_dir ]; then
     if [ -f $this_dir/done ]; then
@@ -211,16 +223,37 @@ for ((i=1;i<$iterations+1;i++)); do
   for_all non-bonded 'cp $(csg_get_interaction_property name).pot.new $(get_main_dir)'
 
   touch done
-  msg "step $i done"
-  cd ..
 
-  if [ -n "$do_iterations" ]; then
-    ((do_iterations--))
-    if [ $do_iterations -lt 1 ] ; then
-      log "Stopping at step $i, user requested to take some rest after this amount of iterations"
+  msg "Clean up"
+  for cleanfile in ${cleanlist} ${CSGRESTART}; do
+    logrun rm -f $cleanfile
+  done
+  unset cleanfile
+
+  step_time="$(( $(get_time) - $step_starttime ))"
+  msg "\nstep $i done, needed $step_time secs"
+  ((steps_done++))
+
+  if [ -n "$wall_time" ]; then
+    avg_steptime="$(( ( ( $steps_done-1 ) * $avg_steptime + $step_time ) / $steps_done + 1 ))"
+    log "New average steptime $avg_steptime"
+    if [ $(( $(get_time) + $avg_steptime )) -gt $(( $wall_time + $start_time )) ]; then
+      msg "We will not manage another step, stopping"
       exit 0
+    else
+      msg "We can go for another $(( ( ${start_time} + $wall_time - $(get_time) ) / $avg_steptime - 1 )) steps"
     fi
   fi
+
+  if [ -n "$do_iterations" ]; then
+    if [ $do_iterations -ge $steps_done ] ; then
+      msg "Stopping at step $i, user requested to take some rest after this amount of iterations"
+      exit 0
+    else
+      msg "Going on for another $(( $do_iterations - $steps_done )) steps"
+    fi
+  fi
+  cd $(get_main_dir) || die "cd $(get_main_dir) failed"
 done
 
 touch done

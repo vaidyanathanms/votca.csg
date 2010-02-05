@@ -1,4 +1,4 @@
-AC_INIT(votca-csg,1.0_rc2,bugs@votca.org)
+AC_INIT(votca-csg,1.0_rc3,bugs@votca.org)
 
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -29,6 +29,9 @@ AX_BOOST([1.33.1])
 AX_VOTCA_TOOLS
 #check for boost
 #AX_BOOST_PROGRAM_OPTIONS
+
+AC_CHECK_PROGS(TXT2TAGS,txt2tags,no)
+AM_CONDITIONAL(HAVE_TXT2TAGS, test "$TXT2TAGS" != no)
 
 
 AC_CONFIG_FILES([Makefile])

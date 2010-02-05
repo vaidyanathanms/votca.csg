@@ -1,0 +1,28 @@
+CHANGELOG
+Votca Developer Team
+%%mtime(%m/%d/%Y)
+
+For more detailed information about the changes see the
+history of the [repository http://hg.votca.org/csg]
+
+== Verion 1.0_rc3 ==
+* added option --wall-time to csg_inverse if run on a queueing system
+* added option for IBI to run in parallel
+* multi_g_rdf, a multiplexed version of g_rdf was added
+* added some options to csg_call 
+* csg_resample now also calc derivatives 
+* fixed a bug in reading stuff from mpd file
+* some fixes concering autotools
+* fixed a bug in calculation of version string
+
+
+== Version 1.0_rc2 ==
+* added version string to scripts
+* added NOTICE and LICENSE to the dist tarball
+* fixed typo in calculation of version string
+
+
+== Version 1.0_rc1 ==
+* initial version
+
+
