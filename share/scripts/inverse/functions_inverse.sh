@@ -96,16 +96,35 @@ die () {
 }
 export -f die
 
+#takes a task, show content of the according script
+cat_external() {
+  local script
+  [[ -n "${SOURCE_WRAPPER}" ]] || die "cat_external: SOURCE_WRAPPER is undefined"
+  script="$($SOURCE_WRAPPER $1 $2)" || die "cat_external: $SOURCE_WRAPPER $1 $2 failed"
+  cat "$script"
+}
+export -f cat_external
+
+#takes a task, shows the according script
+show_external() {
+  local script
+  [[ -n "${SOURCE_WRAPPER}" ]] || die "cat_external: SOURCE_WRAPPER is undefined"
+  script="$($SOURCE_WRAPPER $1 $2)" || die "cat_external: $SOURCE_WRAPPER $1 $2 failed"
+  echo "$script"
+}
+export -f show_external
+
 #takes a task, find the according script and run it.
 #first 2 argument are the task
 do_external() {
-  local script
+  local script tags
   [[ -n "${SOURCE_WRAPPER}" ]] || die "do_external: SOURCE_WRAPPER is undefined"
   script="$($SOURCE_WRAPPER $1 $2)" || die "do_external: $SOURCE_WRAPPER $1 $2 failed" 
+  tags="$1 $2"
   shift 2
   #logrun do_external is a good combi to use
-  log --no-warn "Running subscript '${script##*/} $*'"
-  $script "$@" || die "do_external: $script $@ failed"
+  log --no-warn "Running subscript '${script##*/} $*'(from tags $tags)"
+  $script "$@" || die "do_external: subscript $script $@ (from tags $tags) failed"
 }
 export -f do_external
 
@@ -376,3 +395,21 @@ cp_from_last_step() {
   cp_from_to --from $(get_last_step_dir) "$@" || die "cp_from_main_dir: cp_from_to --from $(get_main_dir) "$@" failed"
 }
 export -f cp_from_last_step
+
+get_time() {
+  date +%s || die "get_time:  time +%s failed"
+}
+export -f get_time
+
+use_mpi() {
+  local tasks cmd
+  tasks="$(csg_get_property --allow-empty cg.inverse.mpi.tasks)"
+  [ -z "$tasks" ] && return 1
+  int_check "$tasks" "use_mpi: cg.inverse.mpi.tasks needs to be a number"
+  [ $tasks -eq 1 ] && return 1
+  cmd="$(csg_get_property --allow-empty cg.inverse.mpi.cmd)"
+  [ -z "$cmd" ] && die "use_mpi: cg.inverse.mpi.tasks != 0 but cg.inverse.mpi.cmd was empty"
+  return 0
+}
+export -f use_mpi
+

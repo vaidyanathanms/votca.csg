@@ -21,6 +21,8 @@ functions common functions_inverse.sh
 # method initialization
 init ibm initialize_generic.sh
 init imc initialize_generic.sh
+init_single ibm initialize_generic_single.sh
+init_single imc initialize_generic_single.sh
 initstep ibm initialize_step_generic.sh
 initstep imc initialize_step_generic.sh
 
@@ -67,7 +69,10 @@ update ibm_pot update_ibm_pot.pl
 # imc specific stuff
 # TODO: rename to imc single
 imcsolver matlab solve_matlab.sh
+solve matlab linsolve.m
 imcsolver octave solve_octave.sh
+solve octave linsolve.octave
+
 imc purify imc_purify.sh
 
 # pressure correction

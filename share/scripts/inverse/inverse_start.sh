@@ -66,7 +66,7 @@ function_file=$($SOURCE_WRAPPER functions common) || die "$SOURCE_WRAPPER functi
 source ${function_file} || exit 1
 unset function_file
 
-CSGSCRIPTDIR="$(csg_get_property cg.inverse.scriptdir)" 
+CSGSCRIPTDIR="$(csg_get_property --allow-empty cg.inverse.scriptdir)" 
 #scriptdir maybe contains $PWD or something
 if [ -n "$CSGSCRIPTDIR" ]; then
   eval CSGSCRIPTDIR=$CSGSCRIPTDIR
@@ -76,21 +76,23 @@ if [ -n "$CSGSCRIPTDIR" ]; then
 fi
 
 CSGLOG="$(csg_get_property cg.inverse.log_file)"
-CSGLOG="$PWD/$CSGLOG"
+CSGLOG="$PWD/${CSGLOG##*/}"
 export CSGLOG
 
 #define $CSGRESTART
 CSGRESTART="$(csg_get_property cg.inverse.restart_file)"
+CSGRESTART="${CSGRESTART##*/}"
 export CSGRESTART
 
 export CSG_MAINDIR="$PWD"
 
 #stuff for options
-int_check "$do_iterations" "inverse.sh: --do-iterations need a number as agrument"
+[ -z "$do_iterations" ] || int_check "$do_iterations" "inverse.sh: --do-iterations need a number as agrument"
+[ -z "$wall_time" ] || int_check "$wall_time" "inverse.sh: --wall-time need a number as agrument"
 if [ "$clean" = "yes" ]; then
   echo -e "So, you want to clean?\n"
   echo "We will remove:"
-  files="$(ls -d done $CSGRESTART $CSGLOG step_* *~ 2>/dev/null)"
+  files="$(ls -d done ${CSGRESTART} ${CSGLOG##$PWD/} step_* *~ 2>/dev/null)"
   echo $files
   echo -e "\nCTRL-C to stop it"
   for ((i=10;i>0;i--)); do

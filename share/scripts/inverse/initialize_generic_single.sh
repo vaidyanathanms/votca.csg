@@ -18,28 +18,30 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script implemtents smoothing of the potential update (.dpot)
+This script implemtents the function initialize
+for the Inverse Boltzmann Method
 
 Usage: ${0##*/}
 
-USES: die csg_get_interaction_property mktemp do_external cp log run_or_exit
+USES: do_external csg_get_interaction_property log run_or_exit csg_resample log
 
-NEEDS: name inverse.post_update_options.smooth.iterations
+NEEDS: name min max step
 EOF
-   exit 0
+  exit 0
 fi
 
 check_deps "$0"
 
 name=$(csg_get_interaction_property name)
-tmpfile=$(mktemp ${name}.XXX) || die "mktemp failed"
-iterations=$(csg_get_interaction_property inverse.post_update_options.smooth.iterations 1)  
-
-run_or_exit cp ${name}.dpot.cur $tmpfile
-log "doing $iterations smoothing iterations"
-
-for((i=0;i<$iterations;i++)); do
-  do_external table smooth $tmpfile ${name}.dpot.new
-  run_or_exit cp ${name}.dpot.new $tmpfile
-done
+if [ -f ../${name}.pot.in ]; then
+  msg "Using given table ${name}.pot.in for ${name}"
+  min=$(csg_get_interaction_property min )
+  max=$(csg_get_interaction_property max )
+  step=$(csg_get_interaction_property step )
+  run_or_exit csg_resample --in ../${name}.pot.in --out ${name}.pot.new --grid ${min}:${step}:${max}
+else
+  # RDF_to_POT.pl just does log g(r) + extrapolation
+  msg "Using intial guess from RDF for ${name}"
+  do_external rdf pot ${name}.dist.tgt ${name}.pot.new
+fi
 
