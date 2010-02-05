@@ -1,0 +1,64 @@
+#! /bin/bash
+# 
+# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+version='@version@'
+#we leave --help here to have it even when
+#CSGSHARE is not defined
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+  cat << eof
+==================================================
+========   VOTCA (http://www.votca.org)   ========
+==================================================
+
+please submit bugs to bugs@votca.org
+
+eof
+  if [ -f ${CSGSHARE}/scripts/inverse/inverse.sh ]; then
+    exec ${CSGSHARE}/scripts/inverse/inverse.sh --help | \
+      sed -e "s/inverse\.sh/${0##*/}/g" -e "s/%version%/${version}/"
+    exit 0
+  fi	
+  cat << eof
+${0##*/}, version ${version}
+
+
+Start the script to run ibm, imc, etc.
+
+Usage: ${0##*/} [OPTIONS] setting_file.xml
+
+Allowed options:
+-h, --help     Show this help
+
+NOTE: this is a short help, please export CSGSHARE to get the full help.
+eof
+exit 0
+fi
+
+if [ -z "${CSGSHARE}" ]; then
+   echo "Error: Environment values CSGSHARE not defined" >&2
+   echo "Please source CSGRC.bash or CSGRC.csh" >&2
+   echo "Try ${0##*/} --help for help" >&2
+   exit 1
+fi
+
+if [ -f ${CSGSHARE}/scripts/inverse/inverse.sh ]; then
+   exec ${CSGSHARE}/scripts/inverse/inverse.sh $@
+   exit 0
+else
+   echo ${0##*/}: Could not run ${CSGSHARE}/scripts/inverse/inverse.sh $@
+   exit 1
+fi

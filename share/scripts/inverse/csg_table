@@ -1,0 +1,104 @@
+# 
+# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# generic function declarations for all inverse scripts
+functions common functions_inverse.sh
+
+# BEGIN: these scripts have to be defined for each method
+# method initialization
+init ibm initialize_generic.sh
+init imc initialize_generic.sh
+initstep ibm initialize_step_generic.sh
+initstep imc initialize_step_generic.sh
+
+# the update step
+update ibm update_ibm.sh
+update imc update_imc.sh
+
+# add up the potential
+# TODO: think about name add_pot, is other name maybe better
+add_pot ibm add_pot_ibm.sh
+add_pot imc add_pot_ibm.sh
+
+# END: these scripts have to be defined for each method
+
+# initial guesses
+rdf pot RDF_to_POT.pl
+
+# post update
+post update post_update.sh
+post update_single post_update_single.sh
+
+#post update scripts
+postupd pressure postupd_pressure.sh
+postupd splinesmooth postupd_splinesmooth.sh
+postupd smooth postupd_smooth.sh
+
+# post add
+post add post_add.sh
+post add_single post_add_single.sh
+
+# post add scripts
+
+# table preparation
+dpot shift_nb dpot_shift_nb.pl
+resample calc resample_to_calc.sh
+dpot crop dpot_crop.pl
+
+# ibm specific stuff
+# TODO: rename to ibm single
+update ibm_single update_ibm_single.sh
+# TODO: rename to ibm pot
+update ibm_pot update_ibm_pot.pl
+
+# imc specific stuff
+# TODO: rename to imc single
+imcsolver matlab solve_matlab.sh
+imcsolver octave solve_octave.sh
+imc purify imc_purify.sh
+
+# pressure correction
+pressure_cor simple pressure_cor_simple.pl
+pressure_cor wjk pressure_cor_wjk.pl
+
+# generic table manipulation
+table add add_POT.pl
+table integrate integrate.pl
+table extrapolate extrapolate.pl
+table merge merge_tables.pl
+table smooth smooth.pl
+table linearop table_linearop.pl
+
+# error analysis
+tables jackknife tables_jackknife.pl
+
+# BEGIN: these scripts have to be defined for each simulation program
+# interface to gromacs
+init gromacs initialize_gromacs.sh
+prepare gromacs prepare_gromacs.sh
+run gromacs run_gromacs.sh
+pressure gromacs calc_pressure_gromacs.sh
+rdf gromacs calc_rdf_gromacs.sh
+imc_stat gromacs imc_stat_generic.sh
+
+# gromacs scripts specific stuff
+convert_potential gromacs potential_to_gromacs.sh
+convert_potential xvg table_to_xvg.pl 
+
+#function for gromacs
+functions gromacs functions_gromacs.sh
+
+# END: these scripts have to be defined for each simulation program
