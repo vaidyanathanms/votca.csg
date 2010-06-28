@@ -22,9 +22,8 @@ if (defined($ARGV[0])&&("$ARGV[0]" eq "--help")){
   print <<EOF;
 $progname, version %version%
 This script:
-- calculates the target function (ftar) by comparing the current and target rdf
+- calculates the target function (ftar) by comparing the current and target density profile
 - sorts ftars according to increasing order of magnitude in simplex table
-- does not update if one of the both rdf are undefined
 
 Usage: $progname infile outfile param_N a_line_nr
 
@@ -46,33 +45,33 @@ my $param_N="$ARGV[2]";
 my $a_line_nr="$ARGV[3]";
 my $prop_N="$ARGV[4]";
 
+my $property="density";
 my $name=csg_get_property("cg.non-bonded.name");
 my $sim_prog=csg_get_property("cg.inverse.program");
-my $property="rdf";
 
-# Resample tgt rdf
-my $aim_rdf_file="$name.dist.tgt";
+# Resample tgt density
+my $aim_dens_file="$name.dens.tgt";
 my @args;
-@args=("bash", "-c", "for_all non-bonded do_external resample target");
+@args=("bash", "-c", "for_all non-bonded do_external resample_simplex $property");
 system(@args);
 undef(@args);
 
-# Calculate new rdf
+# Calculate new density
 @args = ("bash", "-c", "for_all non-bonded do_external $property $sim_prog");
 system(@args);
 undef(@args);
 
-my $cur_rdf_file="$name.dist.new";
+my $cur_dens_file="$name.dens.new";
 
 my @r_aim;
-my @rdf_aim;
+my @dens_aim;
 my @flags_aim;
-(readin_table($aim_rdf_file,@r_aim,@rdf_aim,@flags_aim)) || die "$progname: error at readin_table\n";
+(readin_table($aim_dens_file,@r_aim,@dens_aim,@flags_aim)) || die "$progname: error at readin_table\n";
 
 my @r_cur;
-my @rdf_cur;
+my @dens_cur;
 my @flags_cur;
-(readin_table($cur_rdf_file,@r_cur,@rdf_cur,@flags_cur)) || die "$progname: error at readin_table\n";
+(readin_table($cur_dens_file,@r_cur,@dens_cur,@flags_cur)) || die "$progname: error at readin_table\n";
 
 my @ftar_cur;
 my @flag_cur;
@@ -90,27 +89,19 @@ my (%hash)=readin_simplex_table($infile,$ndim) or die "$progname: error at readi
 die "Different grids \n" if (($r_aim[1]-$r_aim[0])!=($r_cur[1]-$r_cur[0]));
 die "Different start point \n" if (($r_aim[0]-$r_cur[0]) > 0.0);
 
-# --------------------- DEFINE PARAMETERS HERE ---------------------
-my @sig_cur;
-my @eps_cur;
-@sig_cur=@{$hash{p_1}};
-@eps_cur=@{$hash{p_2}};
-
 # ------------------- DEFINE TARGET FUNCTION HERE ------------------
 # Calculate ftar
-my @w=@_;
-my @drdf=@_;
+my @ddens=@_;
 my $ftar=0;
-my $delta_r=csg_get_interaction_property("step");
-my $max=csg_get_interaction_property("max");
+my $dr=csg_get_interaction_property("inverse.simplex.density.step");
+my $max=csg_get_interaction_property("inverse.simplex.density.max");
 
-for(my $i=1;$i<=$max/$delta_r;$i++) {
-       $w[$i]=exp(-$r_cur[$i]/$sig_cur[$a_line_nr]);
-       $drdf[$i]=($rdf_cur[$i]-$rdf_aim[$i]);
-       $ftar+=$delta_r*$w[$i]*($drdf[$i]**2);
+for(my $i=1;$i<=$max/$dr;$i++) {
+       $ddens[$i]=($dens_cur[$i]-$dens_aim[$i]);
+       $ftar+=$dr*($ddens[$i]**2);
 }
 
-$ftar+=(0.5*$delta_r*$w[$max/$delta_r]*$drdf[$max/$delta_r]**2);
+$ftar+=(0.5*$dr*$ddens[$max/$dr]**2);
 
 my $mdim;
 if ($prop_N == 1) {

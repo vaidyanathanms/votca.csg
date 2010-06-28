@@ -19,7 +19,7 @@ cat <<EOF
 ${0##*/}, version %version%
 This script resamples the target distribution to the grid spacing necessary for calculations.
 
-Usage: ${0##*/}
+Usage: ${0##*/} target_directory
 
 USES:  csg_get_interaction_property csg_get_property get_main_dir run_or_exit get_table_comment csg_resample
 
@@ -32,21 +32,11 @@ check_deps "$0"
 
 main_dir=$(get_main_dir)
 name=$(csg_get_interaction_property name)
-property=$(csg_get_property cg.inverse.simplex.property)
 
-if [[ $property =~ "rdf" ]]; then
-  comment="$(get_table_comment)"
-  min=$(csg_get_interaction_property min)
-  max=$(csg_get_interaction_property max)
-  step=$(csg_get_interaction_property step)
-  target=$(csg_get_interaction_property inverse.target)
-  run_or_exit csg_resample --in ${main_dir}/${target} --out ${name}.dist.tgt --grid ${min}:${step}:${max} --comment "${comment}"
-fi
-if [[ $property =~ "density" ]]; then
-  comment="$(get_table_comment)"
-  min=$(csg_get_interaction_property inverse.simplex.density.min)
-  max=$(csg_get_interaction_property inverse.simplex.density.max)
-  step=$(csg_get_interaction_property inverse.simplex.density.step)
-  target=$(csg_get_interaction_property inverse.simplex.density.target)
-  run_or_exit csg_resample --in ${main_dir}/${target} --out ${name}.dens.tgt --grid ${min}:${step}:${max} --comment "${comment}"
-fi
+comment="$(get_table_comment)"
+min=$(csg_get_interaction_property inverse.simplex.density.min)
+max=$(csg_get_interaction_property inverse.simplex.density.max)
+step=$(csg_get_interaction_property inverse.simplex.density.step)
+target=$(csg_get_interaction_property inverse.simplex.density.target)
+
+run_or_exit csg_resample --in ${main_dir}/${target} --out ${name}.dens.tgt --grid ${min}:${step}:${max} --comment "${comment}"

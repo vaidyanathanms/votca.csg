@@ -1,5 +1,5 @@
 #! /bin/bash
-# 
+#
 # Copyright 2009 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,29 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
 if [ "$1" = "--help" ]; then
 cat <<EOF
-${0##*/}, version 1.0_rc1 hgid: 49f54a9b1845112a273f8c1bf2c683f2674f71c7
-This script calls simplex_single for each non-bonded interaction.
+${0##*/}, version %version%
+This script resamples the target distribution to the grid spacing necessary for calculations.
 
-Usage: ${0##*/}
+Usage: ${0##*/} target_directory
 
-USES: get_main_dir for_all csg_get_interaction_property do_external
+USES:  csg_get_interaction_property csg_get_property get_main_dir run_or_exit get_table_comment csg_resample
 
-NEEDS: name
-
+NEEDS: name min max step target property
 EOF
-  exit 0
+   exit 0
 fi
 
 check_deps "$0"
 
-main_dir=$(get_main_dir);
-name=$(for_all non-bonded csg_get_interaction_property name);
+main_dir=$(get_main_dir)
+name=$(csg_get_interaction_property name)
+target=$(csg_get_interaction_property inverse.simplex.surften.target)
 
-if [ -f $main_dir/simplex_$name.in ]; then
-  for_all non-bonded do_external init simplex_single
-else
-  die "No input file simplex_$name.in found"
-fi
+echo "$target" > ${name}.surften.tgt

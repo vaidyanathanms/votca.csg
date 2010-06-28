@@ -19,7 +19,6 @@ if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version 1.0_rc1 hgid: 49f54a9b1845112a273f8c1bf2c683f2674f71c7
 This script:
-- reads simplex infile and creates a table (prep simplex)
 - calculates potential for first parameter set (pot [function])
 - flags that parameter set as 'active' (par pot)
 
@@ -35,13 +34,8 @@ fi
 check_deps "$0"
 
 name=$(csg_get_interaction_property name)
-property=$(csg_get_property cg.inverse.simplex.property)
 function=$(csg_get_interaction_property inverse.simplex.function)
 param_N=$(do_external pot $function --nparams)
-
-# Prepare table
-cp_from_main_dir simplex_$name.in
-do_external prep simplex simplex_$name.in simplex_$name.cur state_$name.new $param_N
 
 # Calculate potential
 do_external par pot simplex_$name.cur simplex_$name.new $param_N 0
