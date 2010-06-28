@@ -51,6 +51,8 @@ use Switch;
 
 my $name=csg_get_property("cg.non-bonded.name");
 my $ftol=csg_get_property("cg.inverse.simplex.ftol");
+my $property=csg_get_property("cg.inverse.simplex.property");
+my @property=split(" ", $property);
 
 # Read previous state file
 my %state_cur;
@@ -201,7 +203,7 @@ print STATE_NEW "Transformation=$state_new\n";
     for (my $i=0;$i<$ndim;$i++) {
         if ($i!=$ilo) {
           for (my $j=0;$j<$param_N;$j++) {
-            $p_asc[$i][$j]=$psum[$j]=0.5*($p_asc[$i][$j]+$p_asc[$ilo][$j]);
+            $p_asc[$i][$j]=0.5*($p_asc[$i][$j]+$p_asc[$ilo][$j]);
             $y_asc[$i]="0";
             $flag[$i]="pending";
           }

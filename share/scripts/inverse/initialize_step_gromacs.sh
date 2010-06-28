@@ -35,12 +35,15 @@ check_deps "$0"
 main_dir=$(get_main_dir);
 cp ${main_dir}/conf.gro ./conf.gro || die "${0##*/} cp ${main_dir}/conf.gro ./conf.gro failed"
 
-steep_mdp="$(csg_get_property cg.inverse.gromacs.steep_mdp "grompp.steep.mdp")"
-[ -f "$steep_mdp" ] || die "${0##*/}: gromacs mdp file '$steep_mdp' not found"
+prep_mdp="$(csg_get_property cg.inverse.gromacs.prep_mdp "grompp.prep.mdp")"
+[ -f "$prep_mdp" ] || die "${0##*/}: gromacs mdp file '$prep_mdp' not found"
 mdp="$(csg_get_property cg.inverse.gromacs.mdp "grompp.mdp")"
 [ -f "$mdp" ] || die "${0##*/}: gromacs mdp file '$mdp' not found"
 
-for_all "non-bonded" check_cufoff $mdp
+#convert potential in format for sim_prog
+for_all non-bonded do_external convert_potential gromacs
+
+for_all "non-bonded" check_cutoff $mdp
 
 index="$(csg_get_property cg.inverse.gromacs.grompp.index "index.ndx")"
 [ -f "$index" ] || die "${0##*/}: grompp index file '$index' not found"
@@ -49,8 +52,8 @@ top="$(csg_get_property cg.inverse.gromacs.grompp.topol "topol.top")"
 tpr="$(csg_get_property cg.inverse.gromacs.topol "topol.tpr")"
 opts="$(csg_get_property --allow-empty cg.inverse.gromacs.grompp.opts)"
 
-# Energy Minimization
-run_or_exit grompp -n "${index}" -f "${steep_mdp}" -p "$top" -o "$tpr" ${opts}
+# Simulated annealing
+run_or_exit grompp -n "${index}" -f "${prep_mdp}" -p "$top" -o "$tpr" ${opts}
 [ -f "$tpr" ] || die "${0##*/}: gromacs tpr file '$tpr' not found after running grompp"
 
 if use_mpi; then
@@ -59,9 +62,10 @@ if use_mpi; then
 else
   run_or_exit mdrun -s "${tpr}" "${opts}"
 fi
- 
+
+mv conf.gro conf_initial.gro
 mv confout.gro conf.gro
 
-# Full MD
+# For full MD
 run_or_exit grompp -n "${index}" -f "${mdp}" -p "$top" -o "$tpr" ${opts}
 [ -f "$tpr" ] || die "${0##*/}: gromacs tpr file '$tpr' not found after running grompp"

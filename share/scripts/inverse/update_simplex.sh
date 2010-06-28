@@ -34,18 +34,20 @@ fi
 
 check_deps "$0"
 
-name=$(for_all non-bonded csg_get_interaction_property name);
+name=$(for_all non-bonded csg_get_interaction_property name)
 function=$(for_all non-bonded csg_get_interaction_property inverse.simplex.function);
-param_N=$(do_external pot $function --nparams);
+property=$(csg_get_property cg.inverse.simplex.property)
+param_N=$(do_external pot $function --nparams)
+ndim=$(($param_N+1))
 
 for_all non-bonded do_external update simplex_single
 
 p_nr=$(grep -c 'pending$' simplex_$name.tmp);
 
 if [ $p_nr == "0" ]; then
-   # Generate new parameter set
-   msg "Calculating new parameter set"
-   do_external update simplex_step simplex_$name.tmp simplex_$name.new $param_N
+  # Generate new parameter set
+  msg "Calculating new parameter set"
+  do_external update simplex_step simplex_$name.tmp simplex_$name.new $param_N
 else 
    msg "Continuing with next parameter set"
    run_or_exit cp simplex_$name.tmp simplex_$name.new
