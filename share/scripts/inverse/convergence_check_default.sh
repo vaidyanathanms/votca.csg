@@ -18,21 +18,29 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script implements the function update
-for the Inverse Boltzmann Method
+dummy script, just do nothing
+useful to overwrite default by nothing
 
 Usage: ${0##*/}
 
-USES:  msg csg_get_property for_all do_external check_deps
+USES: check_deps 
 
-NEEDS: cg.inverse.program
+NEEDS: cg.inverse.convergence_check_options.limit
+
+OPTIONAL: cg.inverse.convergence_check_options.name_glob
 EOF
    exit 0
 fi
 
 check_deps "$0"
 
-msg "Calc rdf"
-sim_prog="$(csg_get_property cg.inverse.program)"
-for_all non-bonded do_external rdf $sim_prog
-for_all non-bonded do_external update ibm_single
+limit="$(csg_get_property cg.inverse.convergence_check_options.limit)"
+glob="$(csg_get_property cg.inverse.convergence_check_options.name_glob "*.conv")"
+
+#we don't have glob pattern or no file matching found
+[ "$glob" = "$(echo $glob)" ] && [ ! -f "$glob" ] && die "${{0##*/}: No file match '$glob' found"
+sum="$(for i in $glob; do
+    cat $i 
+done | awk 'BEGIN{sum=0}{sum+=$1}END{print sum}')"
+log "Convergence sum was $sum, limit is $limit"
+awk -v sum="$sum" -v limit="$limit" 'BEGIN{print (sum<limit)?"stop":"go-on"}'
