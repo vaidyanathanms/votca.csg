@@ -18,11 +18,11 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This is a intialize stuff for gromacs
+This script does initialize stuff for gromacs
 
 Usage: ${0##*/}
 
-USES: check_deps cp_from_main_dir run_or_exit mv
+USES: check_deps cp_from_main_dir critical mv
 
 NEEDS:
 EOF
@@ -31,5 +31,7 @@ fi
 
 check_deps "$0"
 
-cp_from_main_dir conf.gro
-run_or_exit mv conf.gro confout.gro
+conf="$(csg_get_property cg.inverse.gromacs.conf "conf.gro")"
+confout="$(csg_get_property cg.inverse.gromacs.conf_out "confout.gro")"
+cp_from_main_dir $conf
+critical mv $conf $confout
