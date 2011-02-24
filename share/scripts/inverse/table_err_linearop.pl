@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ my $usage="Usage: $progname [OPTIONS] <in> <out> <a> <b>";
 
 #Defaults
 my $withflag=undef;
+my $with_errors="no";
 
 while ((defined ($ARGV[0])) and ($ARGV[0] =~ /^-./))
 {
@@ -48,9 +49,13 @@ $usage
 Allowed options:
 -h, --help            Show this help message
 --withflag            only change entries with specific flag in src
+--with-errors         calculate error
 
 Examples:
 * $progname tmp.dpot.cur tmp.dpot.new 1.0 0.0
+
+USES: readin_table saveto_table
+
 END
 		exit;
 	}
@@ -60,11 +65,14 @@ END
         die "nothing given for --withflag" unless $#ARGV > -1;
         $withflag = $ARGV[0];
     }
-	else
+    elsif ($ARGV[0] eq "--with-errors"){
+        shift(@ARGV);
+        $with_errors="yes";
+    }
+    else
 	{
-		die "Unknow option '".$ARGV[0]."' !\n";
+		die "Unknown option '".$ARGV[0]."' !\n";
 	}
-    shift(@ARGV);
 }
 
 #Print usage
@@ -82,9 +90,14 @@ print "table $file : y' = $a*y + $b\n";
 
 my @r;
 my @val;
+my @val_errors;
 my @flag;
-(readin_table($file,@r,@val,@flag)) || die "$progname: error at readin_table\n";
-
+if ("$with_errors" eq "yes") {
+  (readin_table_err($file,@r,@val,@val_errors,@flag)) || die "$progname: error at readin_err_table\n";
+} else {
+  (readin_table($file,@r,@val,@flag)) || die "$progname: error at readin_table\n";
+}
+ 
 for(my $i=0; $i<=$#r; $i++) {
   # skip if flag does not match
   if($withflag) {
@@ -95,4 +108,9 @@ for(my $i=0; $i<=$#r; $i++) {
   $val[$i] = $a*$val[$i] + $b;
 }
 
-saveto_table($outfile,@r,@val,@flag) || die "$progname: error at save table\n";
+if ("$with_errors" eq "yes") {
+  saveto_table_err($outfile,@r,@val,@val_errors,@flag) || die "$progname: error at save table\n";
+}else {
+  saveto_table($outfile,@r,@val,@flag) || die "$progname: error at save table\n";
+}
+
