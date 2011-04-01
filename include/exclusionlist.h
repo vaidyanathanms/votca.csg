@@ -1,5 +1,5 @@
 /* 
- * Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+ * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,6 +58,8 @@ public:
     iterator end() { return _exclusions.end(); }
     
     bool IsExcluded(int bead1, int bead2);
+
+    void InsertExclusion(int index, list<int> l);
 
 private:
     list< exclusion_t * > _exclusions;

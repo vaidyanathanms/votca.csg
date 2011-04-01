@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -122,10 +122,10 @@ This script extrapolates a table
 $usage
 
 Allowed options:
---avgpoints           average over so many points to extrapolate: default is 3
+--avgpoints           average over the given number of points to extrapolate: default is 3
 --function            constant, linear, quadratic or exponential, sasha: default is quadratic
 --region              left, right, or leftright: default is leftright
---curvature           curvature of the quadratic function: default is 10000
+--curvature           curvature of the quadratic function: default is 10000,
                       makes sense only for quadratic extrapolation, ignored for other cases
 -h, --help            Show this help message
 
@@ -144,9 +144,6 @@ exponential:
 quadratic:
   y = curv*(x+a)^2 + b; a = m/(2*curv) - x0; b = y0 - m^2/(4*curv)
 
-NEEDS:
-
-USES: readin_table saveto_table
 END
 		exit;
 	}

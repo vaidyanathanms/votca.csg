@@ -1,5 +1,5 @@
 /* 
- * Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+ * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ void help_text(void)
 {
     votca::csg::HelpTextHeader("csg_part_dist");
     cout << "This program reads a topology and (set of) trajectory(ies). For every\n"
-	"binned value of a chose coordinate, it outputs the time-averaged number of\n"
+	"binned value of a chosen coordinate, it outputs the time-averaged number of\n"
 	"particles, listed by particle types.\n\n";
 }
 

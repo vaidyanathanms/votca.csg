@@ -1,5 +1,5 @@
 /* 
- * Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+ * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,21 @@
 
 #include "topology.h"
 #include "trajectorywriter.h"
+#include "version_check.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#if GMX == 45
+#if GMX == 50
+        #include <gromacs/legacyheaders/statutil.h>
+        #include <gromacs/legacyheaders/typedefs.h>
+        #include <gromacs/legacyheaders/smalloc.h>
+        #include <gromacs/legacyheaders/vec.h>
+        #include <gromacs/legacyheaders/copyrite.h>
+        #include <gromacs/legacyheaders/statutil.h>
+        #include <gromacs/legacyheaders/tpxio.h>
+#elif GMX == 45
         #include <gromacs/statutil.h>
         #include <gromacs/typedefs.h>
         #include <gromacs/smalloc.h>
@@ -59,13 +68,18 @@ class GMXTrajectoryWriter
     : public TrajectoryWriter
 {
 public:
-    
+    GMXTrajectoryWriter() {
+        gmx::CheckVersion();
+    }
+
     void Open(string file, bool bAppend = false);
     void Close();
     void Write(Topology *conf);
 
     private:
-#if GMX == 45
+#if GMX == 50
+       t_trxstatus* _file;
+#elif GMX == 45
        t_trxstatus* _file;
 #elif GMX == 40
        int _file;

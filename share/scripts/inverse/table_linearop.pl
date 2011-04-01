@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ while ((defined ($ARGV[0])) and ($ARGV[0] =~ /^-./))
 	{
 		print <<END;
 $progname, version %version%
-Performs a linear operaton on the y values:
+This script performs a linear operation on the y values:
 y_new = a*y_old + b
 
 $usage
@@ -49,11 +49,8 @@ Allowed options:
 -h, --help            Show this help message
 --withflag            only change entries with specific flag in src
 
-Examples:  $progname tmp.dpot.cur tmp.dpot.new 1.0 0.0
-
-USES: readin_table saveto_table
-
-NEEDS:
+Examples:
+* $progname tmp.dpot.cur tmp.dpot.new 1.0 0.0
 END
 		exit;
 	}
