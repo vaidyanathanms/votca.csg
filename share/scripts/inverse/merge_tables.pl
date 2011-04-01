@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,18 +47,14 @@ Merge two tables
 $usage
 
 Allowed options:
--v, --version         Prints version
+-v, --version         Print version
 -h, --help            Show this help message
 --withflag            only change entries with specific flag in src
 --noflags             don't copy flags
 --novalues            don't copy values
 
-Examples:  $progname -q
-           $progname
-
-USES: readin_table saveto_table
-NEEDS:
-
+Examples:  
+* $progname intable intable2 outtable
 END
 		exit;
 	}

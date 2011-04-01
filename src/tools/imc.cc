@@ -1,5 +1,5 @@
 /* 
- * Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+ * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,6 +91,12 @@ void Imc::BeginEvaluate(Topology *top, Topology *top_atom)
         beads1.Generate(*top, (*iter)->get("type1").value());
         beads2.Generate(*top, (*iter)->get("type2").value());
 
+        if(beads1.size() == 0)
+            throw std::runtime_error("Topology does not have beads of type \"" + (*iter)->get("type1").value() + "\"\n"
+                    "This was specified in type1 of interaction \"" + name+ "\"");
+        if(beads2.size() == 0)
+            throw std::runtime_error("Topology does not have beads of type \"" + (*iter)->get("type2").value() + "\"\n"
+                    "This was specified in type2 of interaction \"" + name + "\"");
         // calculate normalization factor for rdf
 
         if ((*iter)->get("type1").value() == (*iter)->get("type2").value())
@@ -177,6 +183,20 @@ void Imc::ClearAverages()
         group_iter->second->_corr.clear();      
 }
 
+class IMCNBSearchHandler {
+public:
+    IMCNBSearchHandler(HistogramNew *hist)
+            : _hist(hist) {}
+
+    HistogramNew *_hist;
+
+    bool FoundPair(Bead *b1, Bead *b2, const vec &r, const double dist) {
+        _hist->Process(dist);
+        return false;
+    }
+};
+
+
 // process non-bonded interactions for current frame
 void Imc::Worker::DoNonbonded(Topology *top)
 {
@@ -195,7 +215,7 @@ void Imc::Worker::DoNonbonded(Topology *top)
         // generate the neighbour list
         NBList *nb;
 
-        bool gridsearch=false;
+        bool gridsearch=true;
 
         if(_imc->_options.exists("cg.nbsearch")) {
             if(_imc->_options.get("cg.nbsearch").as<string>() == "grid")
@@ -210,21 +230,25 @@ void Imc::Worker::DoNonbonded(Topology *top)
             nb = new NBList();
 
         nb->setCutoff(i._max + i._step);
-        
+                
+        // clear the current histogram
+        _current_hists[i._index].Clear();
+
+        IMCNBSearchHandler h(&(_current_hists[i._index]));
+
+        nb->SetMatchFunction(&h, &IMCNBSearchHandler::FoundPair);
+
         // is it same types or different types?
         if((*iter)->get("type1").value() == (*iter)->get("type2").value())
             nb->Generate(beads1);
         else
             nb->Generate(beads1, beads2);
-        
-        // clear the current histogram
-        _current_hists[i._index].Clear();
-        
+
         // process all pairs
-        NBList::iterator pair_iter;
+        /*NBList::iterator pair_iter;
         for(pair_iter = nb->begin(); pair_iter!=nb->end();++pair_iter) {
                 _current_hists[i._index].Process((*pair_iter)->dist());
-        }
+        }*/
 
         delete nb;
     }    

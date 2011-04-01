@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,21 +18,14 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script calcs the rdf for gromacs
-for the Inverse Boltzmann Method
+This script calcs the rdf for gromacs using g_rdf
 
 Usage: ${0##*/}
 
-USES: get_from_mdp csg_get_interaction_property csg_get_property awk log run_or_exit csg_resample is_done mark_done msg use_mpi multi_g_rdf check_deps
-
-NEEDS: type1 type2 name step min max
-
-OPTIONAL: cg.inverse.gromacs.equi_time cg.inverse.gromacs.first_frame cg.inverse.mpi.tasks cg.inverse.gromacs.mdp cg.inverse.gromacs.g_rdf.topol cg.inverse.gromacs.g_rdf.index cg.inverse.gromacs.g_rdf.opts cg.inverse.gromacs.traj_type cg.inverse.gromacs.g_rdf.bin
+Used external packages: gromacs
 EOF
    exit 0
 fi
-
-check_deps "$0"
 
 mdp="$(csg_get_property cg.inverse.gromacs.mdp "grompp.mdp")"
 [ -f "$mdp" ] || die "${0##*/}: gromacs mdp file '$mdp' not found"
@@ -55,8 +48,16 @@ g_rdf="$(csg_get_property cg.inverse.gromacs.g_rdf.bin "g_rdf")"
 
 opts="$(csg_get_property --allow-empty cg.inverse.gromacs.g_rdf.opts)"
 
-type1=$(csg_get_interaction_property type1)
-type2=$(csg_get_interaction_property type2)
+grp1=$(csg_get_interaction_property --allow-empty gromacs.grp1)
+if [ -z "$grp1" ]; then
+  grp1=$(csg_get_interaction_property type1)
+  msg --to-stderr "WARNING (in ${0##*/}): could not find energy group of type1 (interaction property gromacs.grp1) using bead type1 ($grp1) as failback !"
+fi
+grp2=$(csg_get_interaction_property --allow-empty gromacs.grp2)
+if [ -z "$grp2" ]; then
+  grp2=$(csg_get_interaction_property type2)
+  msg --to-stderr "WARNING (in ${0##*/}): could not find energy group of type2 (interaction property gromacs.grp2) using bead type2 ($grp2) as failback !"
+fi
 name=$(csg_get_interaction_property name)
 binsize=$(csg_get_interaction_property step)
 min=$(csg_get_interaction_property min)
@@ -65,18 +66,18 @@ max=$(csg_get_interaction_property max)
 begin="$(awk -v dt=$dt -v frames=$first_frame -v eqtime=$equi_time 'BEGIN{print (eqtime > dt*frames ? eqtime : dt*frames) }')"
 end="$(awk -v dt="$dt" -v steps="$steps" 'BEGIN{print dt*steps}')"
 
-log "Running g_rdf for ${type1}-${type2}"
+tasks=$(get_number_tasks)
+echo "Running g_rdf for ${grp1}-${grp2} using $tasks tasks"
 if is_done "rdf-$name"; then
-  msg "g_rdf for ${type1}-${type2} is already done"
+  echo "g_rdf for ${grp1}-${grp2} is already done"
 else
-  if use_mpi; then
-    tasks=$(csg_get_property cg.inverse.mpi.tasks)
-    echo -e "${type1}\n${type2}" | run_or_exit multi_g_rdf --cmd ${g_rdf} -${tasks} -b ${begin} -e ${end} -n "$index" -o ${name}.dist.new.xvg --soutput ${name}.dist.new.NP.xvg -- -bin ${binsize}  -s "$tpr" -f "${traj}" ${opts} 
+  if [ $tasks -gt 1 ]; then
+    echo -e "${grp1}\n${grp2}" | critical multi_g_rdf --cmd ${g_rdf} -${tasks} -b ${begin} -e ${end} -n "$index" -o ${name}.dist.new.xvg --soutput ${name}.dist.new.NP.xvg -- -bin ${binsize}  -s "$tpr" -f "${traj}" ${opts}
   else
-    echo -e "${type1}\n${type2}" | run_or_exit ${g_rdf} -b ${begin} -n "$index" -bin ${binsize} -o ${name}.dist.new.xvg -s "$tpr" -f "${traj}" ${opts}
+    echo -e "${grp1}\n${grp2}" | critical ${g_rdf} -b ${begin} -n "$index" -bin ${binsize} -o ${name}.dist.new.xvg -s "$tpr" -f "${traj}" ${opts}
   fi
   #gromacs always append xvg
   comment="$(get_table_comment)"
-  run_or_exit csg_resample --in ${name}.dist.new.xvg --out ${name}.dist.new --grid ${min}:${binsize}:${max} --comment "$comment"
+  critical csg_resample --in ${name}.dist.new.xvg --out ${name}.dist.new --grid ${min}:${binsize}:${max} --comment "$comment"
   mark_done "rdf-$name"
 fi

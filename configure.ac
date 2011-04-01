@@ -1,4 +1,4 @@
-AC_INIT(votca-csg,1.1-dev,bugs@votca.org)
+AC_INIT(votca-csg,1.1.1,bugs@votca.org)
 
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -63,7 +63,9 @@ AC_CONFIG_FILES([share/scripts/inverse/Makefile])
 AC_CONFIG_FILES([share/scripts/Makefile])
 AC_CONFIG_FILES([share/Makefile])
 AC_CONFIG_FILES([share/doc/Makefile])
+AC_CONFIG_FILES([share/man/Makefile])
 AC_CONFIG_FILES([scripts/Makefile])
+AC_CONFIG_FILES([admin/Makefile])
 
 AC_CONFIG_FILES([share/xml/Makefile])
 AC_CONFIG_FILES([share/template/Makefile])

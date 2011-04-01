@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+ * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ namespace votca {
                 ("trj", boost::program_options::value<string > (), "  atomistic trajectory file")
                 ("begin", boost::program_options::value<double>()->default_value(0.0), "  skip frames before this time")
                 ("first-frame", boost::program_options::value<int>()->default_value(0), "  start with this frame")
-                ("nframes", boost::program_options::value<int>(), "  process so many frames")
+                ("nframes", boost::program_options::value<int>(), "  process the given number of frames")
                 ;
 
             if (DoThreaded())
@@ -273,7 +273,10 @@ namespace votca {
                 //////////////////////////////////////////////////
 
                 _traj_reader->FirstFrame(master->_top);
-                //seek to first frame, let thread0 do that
+                if(master->_top.getBoxType()==BoundaryCondition::typeOpen) {
+                    cout << "NOTE: You are using OpenBox boundary conditions. Check if this is intended.\n" << endl;
+                }
+                //seek first frame, let thread0 do that
                 bool bok;
                 for (bok = true; bok == true; bok = _traj_reader->NextFrame(master->_top)) {
                     if (((master->_top.getTime() < begin) && has_begin) || first_frame > 1) {
@@ -282,14 +285,14 @@ namespace votca {
                     }
                     break;
                 }
-                if (!bok) { // trajectory was too shor and we did not proceed to first frame
+                if (!bok) { // trajectory was too short and we did not proceed to first frame
                     _traj_reader->Close();
                     delete _traj_reader;
 
                     throw std::runtime_error("trajectory was too short, did not process a single frame");
                 }
 
-                // notify all observer that coarse graining has begun
+                // notify all observers that coarse graining has begun
                 if (_do_mapping) {
                     master->_map->Apply();
                     BeginEvaluate(&master->_top_cg, &master->_top);
@@ -300,7 +303,7 @@ namespace votca {
                 /////////////////////////////////////////////////////////////////////////
                 //start threads
                 if (DoThreaded()) {
-                    for (int thread = 0; thread < _myWorkers.size(); thread++) {
+                    for (size_t thread = 0; thread < _myWorkers.size(); thread++) {
 
                         if (SynchronizeThreads()) {
                             Mutex *myMutexIn = new Mutex;
@@ -314,7 +317,7 @@ namespace votca {
                             myMutexOut->Lock();
                         }
                     }
-                    for (int thread = 0; thread < _myWorkers.size(); thread++)
+                    for (size_t thread = 0; thread < _myWorkers.size(); thread++)
                         _myWorkers[thread]->Start();
 
                     if (SynchronizeThreads()) {
@@ -324,7 +327,7 @@ namespace votca {
                     }
                     // mutex needed for merging if SynchronizeThreads()==False
                     Mutex mergeMutex;
-                    for (int thread = 0; thread < _myWorkers.size(); thread++) {
+                    for (size_t thread = 0; thread < _myWorkers.size(); thread++) {
                         _myWorkers[thread]->WaitDone();
                         if (!SynchronizeThreads()) {
                             mergeMutex.Lock();
@@ -333,7 +336,7 @@ namespace votca {
                         }
                         delete _myWorkers[thread];
                     }
-                    for (int thread = 0; thread < _threadsMutexesIn.size(); ++thread) {
+                    for (size_t thread = 0; thread < _threadsMutexesIn.size(); ++thread) {
                         delete _threadsMutexesIn[thread];
                         delete _threadsMutexesOut[thread];
                     }

@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,16 +22,12 @@ use strict;
 if (defined($ARGV[0])&&("$ARGV[0]" eq "--help")){
   print <<EOF;
 $progname, version %version%
-This scripts calculates the jacknife error from existing tables
-* full     =  table calculated with full dataset
+This script calculates the jackknife error from existing tables
+* full     = table calculated with full dataset
 * blocks   = tables calculated with 1 block missing
 * outfile  = file to write results
 
 Usage: $progname out full block1 block2 ...
-
-USES: readin_table saveto_table_err
-
-NEEDS:
 EOF
   exit 0;
 }

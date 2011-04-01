@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,16 +22,10 @@ postadd plot script, send a certain plot script to gnuplot
 
 Usage: ${0##*/} infile outfile
 
-USES: die check_deps run_or_exit mkfifo flock
-
-NEEDS: inverse.post_add_options.plot.script
-
-OPTIONAL: inverse.post_add_options.plot.gnuplot_bin inverse.post_add_options.plot.fd inverse.post_add_options.plot.kill inverse.post_add_options.plot.gnuplot_opts
+Used external packages: gnuplot
 EOF
    exit 0
 fi
-
-check_deps "$0"
 
 start_gnuplot_pipe() {
   eval "exec ${fd}> gnuplot_lock"
@@ -78,6 +72,6 @@ if [ -z "${what_to_kill}" ]; then
 
   cat $script > $(get_main_dir)/gnuplot_pipe || die "piping to gnuplot_pipe failed"
 else
-  logrun killall $what_to_kill
-  logrun $gnuplot $opts $script
+  killall $what_to_kill
+  $gnuplot $opts $script
 fi

@@ -1,6 +1,6 @@
 #! /usr/bin/perl -w
 #
-# Copyright 2009 The VOTCA Development Team (http://www.votca.org)
+# Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,14 +21,10 @@ use strict;
 if (defined($ARGV[0])&&("$ARGV[0]" eq "--help")){
   print <<EOF;
 $progname, version %version%
-This script set the beginning of the dpot to the first valid value and shift the whole potential
-so that dpot(r_max)=0.
+This script sets the beginning of the dpot to the first valid value and shifts the whole potential
+in such a way that dpot(r_max)=0.
 
 Usage: $progname infile outfile
-
-NEEDS:
-
-USES: readin_table saveto_table
 EOF
   exit 0;
 }

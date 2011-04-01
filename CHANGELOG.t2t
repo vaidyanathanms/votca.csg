@@ -3,9 +3,33 @@ Votca Developer Team
 %%mtime(%m/%d/%Y)
 
 For more detailed information about the changes see the
-history of the [repository http://code.google.com/p/votca/source/list?repo=csg]
+history of the [repository http://code.google.com/p/votca/source/list?repo=csg&r=stable]
 
 == Version in hg ==
+
+
+== Version in 1.1.1 ==
+* fixed csg_inverse --clean
+* make postupdate pressure work again
+* fixed bug when reading exclusions from tpr
+* end with error in csg_stat if bead type does not exist (issue 77)
+
+
+== Version in 1.1 (SuperAnn) ==
+* added support for gromacs 5.0
+* csg_dump: can dump exclusion
+* added boundarycondition class
+* added man pages, man7 and man1 for all bins
+* csg_inverse: renamed ibm to ibi
+* csg_inverse: many internal improvements
+* csg_stat: added thread support, read exclusions from tpr file, uses grid search by default
+* csg_inverse: added convergence check, postadd plot, better logging and weaker die
+* csg_resample: added boundary conditions option and akima spline support
+* csg_stat or csg_fmatch give an error if trj not given (issue 29)
+* csg_get_interaction_property knows about defaults
+* fixed segfault in mapping (Fixes issue 27)
+* fixed bug in gromacs writer (frame.bX = true)
+* fixed segfault in gromacs writer (issue 54)
 
 
 == Version 1.0.1 ==
