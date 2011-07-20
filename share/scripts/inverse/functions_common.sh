@@ -420,7 +420,8 @@ get_table_comment() { #get comment lines from a table and add common information
 export -f get_table_comment
 
 csg_inverse_clean() { #clean out the main directory 
-  local i files log
+  local i files log t
+  [[ -n $1 ]] && t="$1" || t="30"
   log="$(csg_get_property cg.inverse.log_file "inverse.log")"
   echo -e "So, you want to clean?\n"
   echo "I will remove:"
@@ -430,7 +431,7 @@ csg_inverse_clean() { #clean out the main directory
   else
     msg --color red $files
     msg --color blue "\nCTRL-C to stop it"
-    for ((i=10;i>0;i--)); do
+    for ((i=$t;i>0;i--)); do
       echo -n "$i "
       sleep 1
     done
@@ -439,6 +440,22 @@ csg_inverse_clean() { #clean out the main directory
   fi
 }
 export -f csg_inverse_clean
+
+check_path_variable() { #check if a variable contains only valid paths
+  local old_IFS dir
+  [[ -z $1 ]] && die "check_path_variable: Missing argument"
+  for var in "$@"; do
+    [[ -z $var ]] && continue
+    old_IFS="$IFS"
+    IFS=":"
+    for dir in ${!var}; do
+      [[ -z $dir ]] && continue
+      [[ -d $dir ]] || die "check_path_variable: $dir from variable $var is not a directory"
+    done
+    IFS="$old_IFS"
+  done
+}
+export -f check_path_variable
 
 add_to_csgshare() { #added an directory to the csg internal search directories
   local dir
@@ -450,6 +467,7 @@ add_to_csgshare() { #added an directory to the csg internal search directories
     export CSGSHARE="$dir${CSGSHARE:+:}$CSGSHARE"
     export PERL5LIB="$dir${PERL5LIB:+:}$PERL5LIB"
   done
+  check_path_variable CSGSHARE PERL5LIB
 }
 export -f add_to_csgshare
 
