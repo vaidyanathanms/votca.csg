@@ -29,7 +29,7 @@ exit 0
 fi
 
 msg() { #echos a msg on the screen and send it to the logfile if logging is enabled
-  local color colors=" blue cyan cyann green red purp "
+  local color colors="blue cyan cyann green red purp"
   if [[ -z ${CSGNOCOLOR} ]]; then
     local blue="[34;01m"
     local cyan="[36;01m"
@@ -42,8 +42,8 @@ msg() { #echos a msg on the screen and send it to the logfile if logging is enab
     local blue cyan cyann green red purp off
   fi
   if [[ $1 = "--color" ]]; then
-    [[ -z $2 ]] && die "msg: missing argument after --color"
-    [[ -n ${colors//* $2 *} ]] && die "msg: Unknown color ($colors allowed)"
+    [[ -z $2 ]] && die "${FUNCNAME[0]}: missing argument after --color"
+    is_part "$2" "${colors}" || die "${FUNCNAME[0]}: Unknown color ($colors allowed)"
     color="${!2}"
     shift 2
   fi
@@ -68,11 +68,33 @@ msg() { #echos a msg on the screen and send it to the logfile if logging is enab
 }
 export -f msg
 
+show_callstack() { #show the current callstack
+  local space line
+  if [[ -n $CSG_CALLSTACK ]]; then
+    echo "$CSG_CALLSTACK"
+    space="$(echo "$CSG_CALLSTACK" | sed -n '$s/[^[:space:]].*$/    /p')"
+  else
+    space=""
+  fi
+  [[ $0 = "bash" ]] || echo "${space}${0} - linenumber ${BASH_LINENO[ $(( ${#FUNCNAME[@]} -2 ))]}"
+  for ((c=${#FUNCNAME[*]}-2;c>0;c--)); do
+    space+="    "
+    if [[ $0 = *csg_call || $0 = *inverse.sh ]]; then
+      echo "${space}${FUNCNAME[$c]} - linenumber ${BASH_LINENO[ $(( $c - 1 )) ]} in ${BASH_SOURCE[$c]}"
+    else
+      echo "${space}${FUNCNAME[$c]} - linenumber ${BASH_LINENO[ $(( $c - 1 )) ]} (see 'csg_call --cat function ${FUNCNAME[$c]}')"
+    fi
+  done
+}
+export -f show_callstack
+
 unset -f die
 die () { #make the iterative frame work stopp
-  local pid pids c
-  msg --color red --to-stderr "$(csg_banner "ERROR:" "$@")"
-  [[ -z $CSGLOG ]] || msg --color blue "For details see $CSGLOG"
+  local pid pids c place
+  echo -e "\nCallstack:"
+  show_callstack
+  [[ -z $CSGLOG ]] && place="Details can be found above" || place="For details see the logfile $CSGLOG"
+  msg --color red --to-stderr "$(csg_banner "ERROR:" "$@" "$place")"
   if [[ -n ${CSG_MASTER_PID} ]]; then
     #grabbing the pid group would be easier, but it would not work on AIX
     pid="$$"
@@ -93,8 +115,8 @@ die () { #make the iterative frame work stopp
       fi
     done
     if [[ -n ${CSGLOG} ]]; then
-      echo "die: (called from $$)  CSG_MASTER_PID is $CSG_MASTER_PID" >&2
-      echo "die: pids to kill: $pids" >&2
+      echo "${FUNCNAME[0]}: (called from $$)  CSG_MASTER_PID is $CSG_MASTER_PID" >&2
+      echo "${FUNCNAME[0]}: pids to kill: $pids" >&2
     fi
     kill $pids
   else
@@ -107,52 +129,54 @@ export -f die
 
 cat_external() { #takes a two tags and shows content of the according script
   local script
-  script="$(source_wrapper $1 $2)" || die "cat_external: source_wrapper $1 $2 failed"
-  cat "${script/ *}"
+  script="$(source_wrapper $1 $2)" || die "${FUNCNAME[0]}: source_wrapper $1 $2 failed"
+  if [[ $1 = "function" ]]; then
+    type $2 | sed '1d'
+  else
+    cat "${script/ *}"
+  fi
 }
 export -f cat_external
 
 do_external() { #takes two tags, find the according script and excute it
-  local script tags quiet="no" 
+  local script tags quiet="no" function="no"
   [[ $1 = "-q" ]] && quiet="yes" && shift
-  script="$(source_wrapper $1 $2)" || die "do_external: source_wrapper $1 $2 failed"
+  script="$(source_wrapper $1 $2)" || die "${FUNCNAME[0]}: source_wrapper $1 $2 failed"
   tags="$1 $2"
-  shift 2
-
-  [[ $quiet = "no" ]] && echo "Running subscript '${script##*/} $*'(from tags $tags)"
-  if [[ -n $CSGDEBUG && -n "$(sed -n '1s@bash@XXX@p' "$script")" ]]; then
-    bash -x $script "$@"
+  [[ $quiet = "no" ]] && echo "Running subscript '${script##*/} $*' (from tags $tags) dir ${script%/*}"
+  if [[ -n $CSGDEBUG ]] && [[ $1 = "function" || -n "$(sed -n '1s@bash@XXX@p' "$script")" ]]; then
+    CSG_CALLSTACK="$(show_callstack)" bash -x $script "${@:3}"
   elif [[ -n $CSGDEBUG && -n "$(sed -n '1s@perl@XXX@p' "$script")" ]]; then
     local perl_debug="$(mktemp perl_debug.XXX)" ret
-    PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2 LineInfo=$perl_debug" perl -dS $script "$@"
+    PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2 LineInfo=$perl_debug" perl -dS $script "${@:3}"
     ret=$?
     cat "$perl_debug" 2>&1
     [[ $ret -eq 0 ]]
   else
-    $script "$@"
-  fi || die "do_external: subscript $script $* (from tags $tags) failed"
+    CSG_CALLSTACK="$(show_callstack)" $script "${@:3}"
+  fi || die "${FUNCNAME[0]}: subscript $script ${@:3} (from tags $tags) failed"
 }
 export -f do_external
 
 critical() { #executes arguments as command and calls die if not succesful
   local quiet="no"
   [[ $1 = "-q" ]] && quiet="yes" && shift
-  [[ -z $1 ]] && die "critical: missing argument"
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: missing argument"
   #print this message to stderr because $(critical something) is used very often
   [[ $quiet = "no" ]] && echo "Running critical command '$*'" >&2
-   "$@" || die "critical: '$*' failed"
+   "$@" || die "${FUNCNAME[0]}: '$*' failed"
 }
 export -f critical
 
 for_all (){ #do something for all interactions (1st argument)
   local bondtype name interactions quiet="no"
   [[ $1 = "-q" ]] && quiet="yes" && shift
-  [[ -z $1 || -z $2 ]] && "for_all need at least two arguments"
+  [[ -z $1 || -z $2 ]] && die "${FUNCNAME[0]}: need at least two arguments"
   bondtype="$1"
   shift
   #check that type is bonded or non-bonded
   if [[ $bondtype != "non-bonded" ]]; then
-    die  "for_all: Argmuent 1 '$bondtype' is not non-bonded"
+    die "${FUNCNAME[0]}: Argmuent 1 '$bondtype' is not non-bonded"
   fi
   [[ $quiet = "no" ]] && echo "For all $bondtype" >&2
   check_for_duplicated_interactions
@@ -165,7 +189,8 @@ for_all (){ #do something for all interactions (1st argument)
     #no need to run unset afterwards
     bondtype="$bondtype" \
     bondname="$name" \
-    bash -c "$*" || die "for_all: bash -c '$*' failed for bondname '$name'"
+    CSG_CALLSTACK="$(show_callstack)" \
+    bash -c "$*" || die "${FUNCNAME[0]}: bash -c '$*' failed for bondname '$name'"
   done
 }
 export -f for_all
@@ -174,7 +199,7 @@ check_for_duplicated_interactions() { #checks for duplicated interactions
   local i j names=( $(csg_get_property cg.non-bonded.name) ) 
   for ((i=0;i<${#names[@]};i++)); do
     for ((j=i+1;j<${#names[@]};j++)); do
-      [[ ${names[$i]} = ${names[$j]} ]] && die "for_all: the interaction name '${names[$i]}' appeared twice, this is not allowed"
+      [[ ${names[$i]} = ${names[$j]} ]] && die "${FUNCNAME[0]}: the interaction name '${names[$i]}' appeared twice, this is not allowed"
     done
   done
 }
@@ -188,31 +213,38 @@ csg_get_interaction_property () { #gets an interaction property from the xml fil
   else
     allow_empty="no"
   fi
-  [[ -n $1 ]] || die "csg_get_interaction_property: Missing argument"
-  [[ -n $bondtype ]] || die "csg_get_interaction_property: bondtype is undefined (when calling from csg_call set it by --ia-type option)"
-  
-  #bondtype is special -> dirty hack - removed whenever issue 13 is fixed
-  #make these this case work even without name (called by csg_call)
-  [[ $1 = "bondtype" ]] && echo "$bondtype" && return 0
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
 
-  [[ -n $bondname ]] || die "csg_get_interaction_property: bondname is undefined (when calling from csg_call set it by --ia-name option)"
-  #make these this case work even without xml file (called by csg_call)
-  [[ $1 = "name" ]] && echo "$bondname" && return 0
+  #make these this case work even without name or type (called by csg_call)
+  if [[ $1 = "name" ]]; then
+    [[ -n $bondname ]] && echo "$bondname" && return 0
+    die "${FUNCNAME[0]}: bondname is undefined (when calling from csg_call set it by --ia-name option)"
+  fi
+  if [[ $1 = "bondtype" ]]; then
+    #bondtype is special -> dirty hack - removed whenever issue 13 is fixed
+    [[ -n $bondtype ]] && echo "$bondtype" && return 0
+    die "${FUNCNAME[0]}: bondname is undefined (when calling from csg_call set it by --ia-name option)"
+  fi
 
-  [[ -n $CSGXMLFILE ]] || die "csg_get_interaction_property: CSGXMLFILE is undefined (when calling from csg_call set it by --options option)"
-  [[ -n "$(type -p csg_property)" ]] || die "csg_get_interaction_property: Could not find csg_property"
+  [[ -n $CSGXMLFILE ]] || die "${FUNCNAME[0]}: CSGXMLFILE is undefined (when calling from csg_call set it by --options option)"
+  [[ -n $bondtype ]] || die "${FUNCNAME[0]}: bondtype is undefined (when calling from csg_call set it by --ia-type option)"
+  [[ -n $bondname ]] || die "${FUNCNAME[0]}: bondname is undefined (when calling from csg_call set it by --ia-name option)"
+
+  [[ -n "$(type -p csg_property)" ]] || die "${FUNCNAME[0]}: Could not find csg_property"
   cmd="csg_property --file $CSGXMLFILE --short --path cg.${bondtype} --filter name=$bondname --print $1"
   #the --filter option will make csg_property fail if $1 does not exist, don't stop if we have an default
   if ! ret="$($cmd)"; then
+    #workaround for issue #114
+    rm -f core core.*
     [[ $allow_empty = "no" && -z $2 ]] && \
-      die "csg_get_interaction_property:\n'$cmd'\nfailed geting '$1' for interaction '$bondname' with error msg:\n $ret\n and no default for $1"
+      die "${FUNCNAME[0]}:\n'$cmd'\nfailed geting '$1' for interaction '$bondname' with error msg:\n $ret\n and no default for $1"
     #ret has error message
     ret=""
   fi
   ret="${ret%%[[:space:]]}"
   ret="${ret##[[:space:]]}"
   [[ $allow_empty = no && -z $ret && -n $2 ]] && ret="$2"
-  [[ $allow_empty = no && -z $ret ]] && die "csg_get_interaction_property: Could not get '$1' for interaction '$bondname'\nResult of '$cmd' was empty"
+  [[ $allow_empty = no && -z $ret ]] && die "${FUNCNAME[0]}: Could not get '$1' for interaction '$bondname'\nResult of '$cmd' was empty"
   echo "${ret}"
 }
 export -f csg_get_interaction_property
@@ -225,23 +257,24 @@ csg_get_property () { #get an property from the xml file
   else
     allow_empty="no"
   fi
-  [[ -n $1 ]] || die "csg_get_property: Missing argument"
-  [[ -n $CSGXMLFILE ]] || die "csg_get_property: CSGXMLFILE is undefined (when calling from csg_call set it by --options option)"
-  [[ -n "$(type -p csg_property)" ]] || die "csg_get_property: Could not find csg_property"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
+  [[ -n $CSGXMLFILE ]] || die "${FUNCNAME[0]}: CSGXMLFILE is undefined (when calling from csg_call set it by --options option)"
+  [[ -n "$(type -p csg_property)" ]] || die "${FUNCNAME[0]}: Could not find csg_property"
   cmd="csg_property --file $CSGXMLFILE --path ${1} --short --print ."
   #csg_property only fails if xml file is bad otherwise result is empty
+  #leave the -q here to avoid flooding with messages
   ret="$(critical -q $cmd)"
   ret="${ret%%[[:space:]]}"
   ret="${ret##[[:space:]]}"
   [[ -z $ret && -n $2 ]] && ret="$2"
-  [[ $allow_empty = "no" && -z $ret ]] && die "csg_get_property: Could not get '$1'\nResult of '$cmd' was empty"
+  [[ $allow_empty = "no" && -z $ret ]] && die "${FUNCNAME[0]}: Could not get '$1'\nResult of '$cmd' was empty"
   echo "${ret}"
 }
 export -f csg_get_property
 
 mark_done () { #mark a task (1st argument) as done in the restart file
   local file
-  [[ -n $1 ]] || die "mark_done: Missing argument"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
   file="$(get_restart_file)"
   is_done "$1" || echo "$1 done" >> "${file}"
 }
@@ -249,7 +282,7 @@ export -f mark_done
 
 is_done () { #checks if something is already do in the restart file
   local file
-  [[ -n $1 ]] || die "is_done: Missing argument"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
   file="$(get_restart_file)"
   [[ -f ${file} ]] || return 1
   [[ -n "$(sed -n "/^$1 done\$/p" ${file})" ]] && return 0
@@ -257,58 +290,70 @@ is_done () { #checks if something is already do in the restart file
 }
 export -f is_done
 
-int_check() { #checks if 1st argument is a integer or calls die with error message (2nd argument)
-  [[ -n $2 ]] || die "int_check: Missing argument"
-  [[ -n $1 && -z ${1//[0-9]} ]] && return 0
-  shift
-  die "$*"
+is_int() { #checks if all arguments are integers
+  local i
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: Missing argument"
+  for i in "$@"; do
+    [[ -n $i && -z ${i//[0-9]} ]] || return 1
+  done
+  return 0
 }
-export -f int_check
+export -f is_int
 
-num_check() { #checks if 1st argument is a number or calls die with error message (2nd argument)
-  local res
-  [[ -n $1 || -n $2 ]] || die "num_check: Missing argument"
-  res=$(awk -v x="$1" 'BEGIN{ print x+0==x; }')
-  [[ $res -eq 1 ]] && return 0
-  shift
-  die "$*"
+is_part() { #checks if 1st argument is part of the set given by other arguments
+  [[ -z $1 || -z $2 ]] && die "${FUNCNAME[0]}: Missing argument"
+  [[ " ${@:2} " = *" $1 "* ]]
 }
-export -f num_check
+export -f is_part
+
+is_num() { #checks if all arguments are numbers
+  local i res
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: Missing argument"
+  for i in "$@"; do
+    res=$(awk -v x="$i" 'BEGIN{ print x+0==x; }')
+    [[ $res -eq 1 ]] || return 1
+    unset res
+  done
+  return 0
+}
+export -f is_num
 
 get_stepname() { #get the dir name of a certain step number (1st argument)
   local name
-  [[ -n $1 ]] || die "get_stepname: Missing argument"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
   if [[ $1 = "--trunc" ]]; then
     echo "step_"
     return 0
   fi
-  int_check "${1#-}" "get_stepname: needs a int as argument, but was $1"
+  is_int "${1}" || die "${FUNCNAME[0]}: needs a int as argument, but got $1"
   name="$(printf step_%03i "$1")"
-  [[ -z $name ]] && die "get_stepname: Could not get stepname"
+  [[ -z $name ]] && die "${FUNCNAME[0]}: Could not get stepname"
   echo "$name"
 }
 export -f get_stepname
 
 update_stepnames(){ #updated the current working step to a certain number (1st argument)
   local thisstep laststep nr
-  [[ -n $1 ]] || die "update_stepnames: Missing argument"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
   nr="$1"
-  int_check "$nr" "update_stepnames: needs a int as argument"
-  [[ -z $CSG_MAINDIR ]] && die "update_stepnames: CSG_MAINDIR is undefined"
-  [[ -d $CSG_MAINDIR ]] || die "update_stepnames: $CSG_MAINDIR is not dir"
+  is_int "$nr" || die "${FUNCNAME[0]}: needs a int as argument, but got $nr"
+  [[ -z $CSG_MAINDIR ]] && die "${FUNCNAME[0]}: CSG_MAINDIR is undefined"
+  [[ -d $CSG_MAINDIR ]] || die "${FUNCNAME[0]}: $CSG_MAINDIR is not dir"
   thisstep="$(get_stepname $nr)"
-  laststep="$(get_stepname $((nr-1)) )"
   export CSG_THISSTEP="$CSG_MAINDIR/$thisstep"
-  export CSG_LASTSTEP="$CSG_MAINDIR/$laststep"
+  if [[ $nr -gt 0 ]]; then
+    laststep="$(get_stepname $((nr-1)) )"
+    export CSG_LASTSTEP="$CSG_MAINDIR/$laststep"
+  fi
 }
 export -f update_stepnames
 
 get_current_step_dir() { #print the directory of the current step
-  [[ -z $CSG_THISSTEP ]] && die "get_current_step_dir: \$CSG_THISSTEP is undefined (when calling from csg_call export it yourself)"
+  [[ -z $CSG_THISSTEP ]] && die "${FUNCNAME[0]}: \$CSG_THISSTEP is undefined (when calling from csg_call export it yourself)"
   if [[ $1 = "--no-check" ]]; then
     :
   else
-    [[ -d $CSG_THISSTEP ]] || die "get_last_step_dir: $CSG_THISSTEP is not dir"
+    [[ -d $CSG_THISSTEP ]] || die "${FUNCNAME[0]}: $CSG_THISSTEP is not dir"
   fi
   echo "$CSG_THISSTEP"
 
@@ -316,15 +361,15 @@ get_current_step_dir() { #print the directory of the current step
 export -f get_current_step_dir
 
 get_last_step_dir() { #print the directory of the last step
-  [[ -z $CSG_LASTSTEP ]] && die "get_last_step_dir: CSG_LASTSTEP is undefined  (when calling from csg_call export it yourself)"
-  [[ -d $CSG_LASTSTEP ]] || die "get_last_step_dir: $CSG_LASTSTEP is not dir"
+  [[ -z $CSG_LASTSTEP ]] && die "${FUNCNAME[0]}: CSG_LASTSTEP is undefined  (when calling from csg_call export it yourself)"
+  [[ -d $CSG_LASTSTEP ]] || die "${FUNCNAME[0]}: $CSG_LASTSTEP is not dir"
   echo "$CSG_LASTSTEP"
 }
 export -f get_last_step_dir
 
 get_main_dir() { #print the main directory
-  [[ -z $CSG_MAINDIR ]] && die "get_main_dir: CSG_MAINDIR is defined"
-  [[ -d $CSG_MAINDIR ]] || die "update_stepnames: $CSG_MAINDIR is not dir"
+  [[ -z $CSG_MAINDIR ]] && die "${FUNCNAME[0]}: CSG_MAINDIR is defined"
+  [[ -d $CSG_MAINDIR ]] || die "${FUNCNAME[0]}: $CSG_MAINDIR is not dir"
   echo "$CSG_MAINDIR"
 }
 export -f get_main_dir
@@ -340,12 +385,12 @@ export -f get_current_step_nr
 get_step_nr() { #print the number of a certain step directory (1st argument)
   local nr trunc
   trunc=$(get_stepname --trunc)
-  [[ -n $1 ]] || die "get_step_nr: Missing argument"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
   nr=${1##*/}
   nr=${nr#$trunc}
   #convert to base 10 and cut leading zeros
   nr=$((10#$nr))
-  int_check "$nr" "get_step_nr: Could not fetch step nr"
+  is_int "$nr" || die "${FUNCNAME[0]}: Could not fetch step nr, got $nr"
   echo "$nr"
 }
 export -f get_step_nr
@@ -353,7 +398,7 @@ export -f get_step_nr
 cp_from_main_dir() { #copy something from the main directory
   if [[ $1 = "--rename" ]]; then
     shift
-    [[ $# -eq 2 && -n $1 && -n $2 ]] || die "cp_from_main_dir: with --rename option has to be called with exactly 2 (non-empty) arguments"
+    [[ $# -eq 2 && -n $1 && -n $2 ]] || die "${FUNCNAME[0]}: with --rename option has to be called with exactly 2 (non-empty) arguments"
     echo "cp_from_main_dir: '$1' to '$2'"
     critical pushd "$(get_main_dir)"
     critical cp $1 "$(dirs -l +1)/$2"
@@ -370,7 +415,7 @@ export -f cp_from_main_dir
 cp_from_last_step() { #copy something from the last step
   if [[ $1 = "--rename" ]]; then
     shift
-    [[ $# -eq 2 && -n $1 && -n $2 ]] || die "cp_from_last_step: with --rename option has to be called with exactly 2 (non-empty) arguments"
+    [[ $# -eq 2 && -n $1 && -n $2 ]] || die "${FUNCNAME[0]}: with --rename option has to be called with exactly 2 (non-empty) arguments"
     echo "cp_from_last_step: '$1' to '$2'"
     critical pushd "$(get_last_step_dir)"
     critical cp $1 "$(dirs -l +1)/$2"
@@ -384,8 +429,8 @@ cp_from_last_step() { #copy something from the last step
 }
 export -f cp_from_last_step
 
-get_time() {
-  date +%s || die "get_time:  date +%s failed"
+get_time() { #gives back current time in sec from 1970
+  date +%s || die "${FUNCNAME[0]}:  date +%s failed"
 }
 export -f get_time
 
@@ -393,7 +438,7 @@ get_number_tasks() { #get the number of possible tasks from the xml file or dete
   local tasks
   tasks="$(csg_get_property cg.inverse.simulation.tasks "auto")"
   [[ $tasks = "auto" ]] && tasks=0
-  int_check "$tasks" "get_number_tasks: cg.inverse.parallel.tasks needs to be a number or 'auto'"
+  is_int "$tasks" || die "${FUNCNAME[0]}: cg.inverse.simulation.tasks needs to be a number or 'auto', but I got $tasks"
   #this only work for linux
   if [[ $tasks -eq 0 && -r /proc/cpuinfo ]]; then
     tasks=$(sed -n '/processor/p' /proc/cpuinfo | sed -n '$=')
@@ -406,21 +451,22 @@ export -f get_number_tasks
 
 get_table_comment() { #get comment lines from a table and add common information, which include the hgid and other information
   local version co
-  [[ -n "$(type -p csg_call)" ]] || die "get_defaults_comment: Could not find csg_version"
-  version="$(csg_call --version)" || die "get_defaults_comment: csg_call --version failed"
+  [[ -n "$(type -p csg_call)" ]] || die "${FUNCNAME[0]}: Could not find csg_version"
+  version="$(csg_call --version)" || die "${FUNCNAME[0]}: csg_call --version failed"
   echo "Created on $(date) by $USER@$HOSTNAME"
   echo "called from $version" | sed "s/csg_call/${0##*/}/"
   [[ -n ${CSGXMLFILE} ]] && echo "settings file: $(globalize_file $CSGXMLFILE)"
   echo "working directory: $PWD"
   if [[ -f $1 ]]; then 
-    co=$(sed -n 's/^[#@][[:space:]]*//p' "$1") || die "get_table_comment: sed failed"
+    co=$(sed -n 's/^[#@][[:space:]]*//p' "$1") || die "${FUNCNAME[0]}: sed failed"
     [[ -n $co ]] && echo "Comments from $(globalize_file $1):\n$co"
   fi
 }
 export -f get_table_comment
 
 csg_inverse_clean() { #clean out the main directory 
-  local i files log
+  local i files log t
+  [[ -n $1 ]] && t="$1" || t="30"
   log="$(csg_get_property cg.inverse.log_file "inverse.log")"
   echo -e "So, you want to clean?\n"
   echo "I will remove:"
@@ -430,7 +476,7 @@ csg_inverse_clean() { #clean out the main directory
   else
     msg --color red $files
     msg --color blue "\nCTRL-C to stop it"
-    for ((i=10;i>0;i--)); do
+    for ((i=$t;i>0;i--)); do
       echo -n "$i "
       sleep 1
     done
@@ -440,30 +486,59 @@ csg_inverse_clean() { #clean out the main directory
 }
 export -f csg_inverse_clean
 
-add_to_csgshare() { #added an directory to the csg internal search directories
-  local dir
-  for dir in "$@"; do
-    [[ -z $dir ]] && die "add_to_csgshare: Missing argument"
-    #dir maybe contains $PWD or something
-    eval dir="$dir"
-    dir="$(globalize_dir "$dir")"
-    export CSGSHARE="$dir${CSGSHARE:+:}$CSGSHARE"
-    export PERL5LIB="$dir${PERL5LIB:+:}$PERL5LIB"
+check_path_variable() { #check if a variable contains only valid paths
+  local old_IFS dir
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: Missing argument"
+  for var in "$@"; do
+    [[ -z $var ]] && continue
+    old_IFS="$IFS"
+    IFS=":"
+    for dir in ${!var}; do
+      [[ -z $dir ]] && continue
+      [[ -d $dir ]] || die "${FUNCNAME[0]}: $dir from variable $var is not a directory"
+    done
+    IFS="$old_IFS"
   done
+}
+export -f check_path_variable
+
+add_to_csgshare() { #added an directory to the csg internal search directories
+  local dir end="no"
+  [[ $1 = "--at-the-end" ]] && end="yes" && shift
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: Missing argument"
+  for dirlist in "$@"; do
+    old_IFS="$IFS"
+    IFS=":"
+    for dir in $dirlist; do
+      #dir maybe contains $PWD or something
+      eval dir="$dir"
+      [[ -d $dir ]] || die "${FUNCNAME[0]}: Could not find scriptdir $dir"
+      dir="$(globalize_dir "$dir")"
+      if [[ $end = "yes" ]]; then
+        export CSGSHARE="${CSGSHARE}${CSGSHARE:+:}$dir"
+        export PERL5LIB="${PERL5LIB}${PERL5LIB:+:}$dir"
+      else
+        export CSGSHARE="$dir${CSGSHARE:+:}$CSGSHARE"
+        export PERL5LIB="$dir${PERL5LIB:+:}$PERL5LIB"
+      fi
+    done
+    IFS="$old_IFS"
+  done
+  check_path_variable CSGSHARE PERL5LIB
 }
 export -f add_to_csgshare
 
 globalize_dir() { #convert a local directory to a global one
-  [[ -z $1 ]] && die "globalize_dir: missing argument"
-  [[ -d $1 ]] || die "globalize_dir: '$1' is not a dir"
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: missing argument"
+  [[ -d $1 ]] || die "${FUNCNAME[0]}: '$1' is not a dir"
   cd "$1"
   pwd
 }
 export -f globalize_dir
 
 globalize_file() { #convert a local file name to a global one
-  [[ -z $1 ]] && die "globalize_file: missing argument"
-  [[ -f $1 ]] || die "globalize_file: '$1' is not a file"
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: missing argument"
+  [[ -f $1 ]] || die "${FUNCNAME[0]}: '$1' is not a file"
   local dir
   [[ ${1%/*} = ${1} ]] && dir="." || dir="${1%/*}"
   echo "$(globalize_dir "$dir")/${1##*/}"
@@ -472,9 +547,9 @@ export -f globalize_file
 
 source_function() { #source an extra function file
   local function_file
-  [[ -n $1 ]] || die "source_function: Missing argument"
-  function_file=$(source_wrapper functions $1) || die "source_function: source_wrapper functions $1 failed"
-  source ${function_file} || die "source_function: source ${function_file} failed"
+  [[ -n $1 ]] || die "${FUNCNAME[0]}: Missing argument"
+  function_file=$(source_wrapper functions $1) || die "${FUNCNAME[0]}: source_wrapper functions $1 failed"
+  source ${function_file} || die "${FUNCNAME[0]}: source ${function_file} failed"
 }
 export -f source_function
 
@@ -508,17 +583,17 @@ export -f csg_banner
 
 csg_calc() { #simple calculator, a + b, ...
   local res ret=0 err="1e-2"
-  [[ -z $1 || -z $2 || -z $3 ]] && die "csg_calc: Needs 3 arguments, but got '$*'"
-  num_check "$1" "csg_calc: First argument should be a number, but found '$1'"
-  num_check "$3" "csg_calc: Third argument should be a number, but found '$3'"
-  [[ -n "$(type -p awk)" ]] || die "csg_calc: Could not find awk"
+  [[ -z $1 || -z $2 || -z $3 ]] && die "${FUNCNAME[0]}: Needs 3 arguments, but got '$*'"
+  is_num "$1" || die "${FUNCNAME[0]}: First argument of csg_calc should be a number, but got '$1'"
+  is_num "$3" || die "${FUNCNAME[0]}: Third argument of csg_calc should be a number, but got '$3'"
+  [[ -n "$(type -p awk)" ]] || die "${FUNCNAME[0]}: Could not find awk"
   #we use awk -v because then " 1 " or "1\n" is equal to 1
   case "$2" in
     "+"|"-"|'*'|"/"|"**")
-       res="$(awk -v x="$1" -v y="$3" "BEGIN{print x $2 y}")" || die "csg_calc: awk -v x='$1' -v y='$3' 'BEGIN{print x $2 y}' failed"
+       res="$(awk -v x="$1" -v y="$3" "BEGIN{print x $2 y}")" || die "${FUNCNAME[0]}: awk -v x='$1' -v y='$3' 'BEGIN{print x $2 y}' failed"
        true;;
     '>'|'<' )
-       res="$(awk -v x="$1" -v y="$3" "BEGIN{print ( x $2 y )}")" || die "csg_calc: awk -v x='$1' -v y='$3' 'BEGIN{print ( x $2 y )}' failed"
+       res="$(awk -v x="$1" -v y="$3" "BEGIN{print ( x $2 y )}")" || die "${FUNCNAME[0]}: awk -v x='$1' -v y='$3' 'BEGIN{print ( x $2 y )}' failed"
        #awk return 1 for true and 0 for false, shell exit codes are the other way around
        ret="$((1-$res))"
        #return value matters
@@ -526,14 +601,14 @@ csg_calc() { #simple calculator, a + b, ...
        true;;
     "="|"==")
        #we expect that x and y are close together
-       res="$(awk -v x="$1" -v y="$3" "BEGIN{print ( sqrt(((x-y)/x)**2) < $err )}")" || die "csg_calc: awk -v x='$1' -v y='$3' 'BEGIN{print ( sqrt(((x-y)/x)**2) < $err )}' failed"
+       res="$(awk -v x="$1" -v y="$3" "BEGIN{print ( sqrt(((x-y)/x)**2) < $err )}")" || die "${FUNCNAME[0]}: awk -v x='$1' -v y='$3' 'BEGIN{print ( sqrt(((x-y)/x)**2) < $err )}' failed"
        #awk return 1 for true and 0 for false, shell exit codes are the other way around
        ret="$((1-$res))"
        #return value matters
        res=""
        true;;
     *)
-       die "csg_calc: unknow operation" 
+       die "${FUNCNAME[0]}: unknow operation" 
        true;;
   esac
   [[ -n $res ]] && echo "$res"
@@ -546,6 +621,7 @@ show_csg_tables() { #show all concatinated csg tables
   old_IFS="$IFS"
   IFS=":"
   echo "#The order in which scripts get called"
+  echo "#CSGSHARE is $CSGSHARE"
   for dir in ${CSGSHARE}; do
     [[ -f $dir/csg_table ]] || continue
     echo "#From: $dir/csg_table"
@@ -557,7 +633,7 @@ show_csg_tables() { #show all concatinated csg tables
 export -f show_csg_tables
 
 get_command_from_csg_tables() { #print the name of script belonging to certain tags (1st, 2nd argument)
-  [[ -z $1 || -z $2 ]] && die "get_command_from_csg_tables: Needs two tags"
+  [[ -z $1 || -z $2 ]] && die "${FUNCNAME[0]}: Needs two tags"
   show_csg_tables | \
     sed -e '/^#/d' | \
     sed -n "s/^$1 $2 \(.*\)$/\1/p" | \
@@ -566,21 +642,26 @@ get_command_from_csg_tables() { #print the name of script belonging to certain t
 export -f get_command_from_csg_tables
 
 source_wrapper() { #print the full name of a script belonging to two tags (1st, 2nd argument)
-  [[ -z $1 || -z $2 ]] && die "source_wrapper: Needs two tags"
+  [[ -z $1 || -z $2 ]] && die "${FUNCNAME[0]}: Needs two tags"
   local cmd script
-  cmd=$(get_command_from_csg_tables "$1" "$2") || die
-  [[ -z $cmd ]] && die "source_wrapper: Could not get any script from tags '$1' '$2'"
-  script="${cmd/* }"
-  real_script="$(find_in_csgshare "$script")"
-  echo "${cmd/${script}/${real_script}}"
+  if [[ $1 = "function" ]]; then
+    [[ $(type -t "$2") = "function" ]] || die "${FUNCNAME[0]}: could not find any function called '$2' (when calling from csg_call you might need to add --simprog option or set cg.inverse.program in the xml file)"
+    echo "$2"
+  else
+    cmd=$(get_command_from_csg_tables "$1" "$2") || die "${FUNCNAME[0]}: get_command_from_csg_tables '$1' '$2' failed"
+    [[ -z $cmd ]] && die "${FUNCNAME[0]}: Could not get any script from tags '$1' '$2'"
+    script="${cmd/* }"
+    real_script="$(find_in_csgshare "$script")"
+    echo "${cmd/${script}/${real_script}}"
+  fi
 }
 export -f source_wrapper
 
 find_in_csgshare() { #find a script in csg script search path
-  [[ -z $1 ]] && die "find_in_csgshare: missing argument"
+  [[ -z $1 ]] && die "${FUNCNAME[0]}: missing argument"
   #global path
   if [[ -z ${1##/*} ]]; then
-    [[ -f $1 ]] || die "find_in_csgshare: $1 is a script with global path, but was not found"
+    [[ -f $1 ]] || die "${FUNCNAME[0]}: $1 is a script with global path, but was not found"
     echo "$1" && return
   fi
   local old_IFS dir
@@ -591,15 +672,15 @@ find_in_csgshare() { #find a script in csg script search path
   done
   IFS="$old_IFS"
   [[ -f $dir/$1 ]] && echo "$dir/$1" && return
-  die "find_in_csgshare: Could not find script $1 in $CSGSHARE"
+  die "${FUNCNAME[0]}: Could not find script $1 in $CSGSHARE"
 }
 export -f find_in_csgshare
 
 if [ -z "$(type -p mktemp)" ]; then
   #do not document this
   mktemp() {
-    [[ -z $1 ]] && die "mktemp: missing argument"
-    [[ -z ${1##*X} ]] || die "mktemp: argument has to end at least with X"
+    [[ -z $1 ]] && die "${FUNCNAME[0]}: missing argument"
+    [[ -z ${1##*X} ]] || die "${FUNCNAME[0]}: argument has to end at least with X"
     local end trunc i l tmp newend
     end=${1##*[^X]}
     trunc=${1%${end}}
@@ -621,7 +702,7 @@ fi
 enable_logging() { #enables the logging to a certain file (1st argument) or the logfile taken from the xml file
   local log
   if [[ -z $1 ]]; then
-    log="$(csg_get_property cg.inverse.log_file "inverse.log")"
+    log="$(csg_get_property cg.inverse.log_file "inverse.log")" 2> /dev/null
   else
     log="$1"
   fi
@@ -643,7 +724,7 @@ export -f enable_logging
 get_restart_file() { #print the name of the restart file to use
   local file
   file="$(csg_get_property cg.inverse.restart_file "restart_points.log")"
-  [[ -z ${file/*\/*} ]] && die "get_restart_file: cg.inverse.restart_file has to be a local file with slash '/'"
+  [[ -z ${file/*\/*} ]] && die "${FUNCNAME[0]}: cg.inverse.restart_file has to be a local file with slash '/'"
   echo "$file"
 }
 export -f get_restart_file
@@ -651,7 +732,7 @@ export -f get_restart_file
 check_for_obsolete_xml_options() { #check xml file for obsolete options
   local i
   for i in cg.inverse.mpi.tasks cg.inverse.mpi.cmd cg.inverse.parallel.tasks cg.inverse.parallel.cmd \
-    cg.inverse.gromacs.mdrun.bin cg.inverse.espresso.bin; do
+    cg.inverse.gromacs.mdrun.bin cg.inverse.espresso.bin cg.inverse.scriptdir; do
     [[ -z "$(csg_get_property --allow-empty $i)" ]] && continue #filter me away
     case $i in
       cg.inverse.parallel.cmd|cg.inverse.mpi.cmd)
@@ -660,11 +741,13 @@ check_for_obsolete_xml_options() { #check xml file for obsolete options
         new="cg.inverse.simulation.tasks";;
       cg.inverse.gromacs.mdrun.bin|cg.inverse.espresso.bin)
         new="${i/bin/command}";;
+      cg.inverse.scriptdir)
+        new="${i/dir/path}";;
       *)
-        die "check_for_obsolete_xml_options: Unknown new name for obsolete xml option '$i'";;
+        die "${FUNCNAME[0]}: Unknown new name for obsolete xml option '$i'";;
     esac
     [[ -n $new ]] && new="has been renamed to $new" || new="has been removed"
-    die "The xml option $i $new\nPlease remove the obsolete options from the xmlfile"
+    die "${FUNCNAME[0]}: The xml option $i $new\nPlease remove the obsolete options from the xmlfile"
   done
 }
 export -f check_for_obsolete_xml_options

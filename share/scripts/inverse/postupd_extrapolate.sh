@@ -18,15 +18,24 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script implements the function update for the Inverse Boltzmann Method
+This script implements extrapolation undefined region of the potential update (.dpot)
 
-Usage: ${0##*/}
+Usage: ${0##*/} infile outfile
 EOF
    exit 0
 fi
 
-sim_prog="$(csg_get_property cg.inverse.program)"
-#if using csg_stat, like in the case of gromacs 'for_all' is actually not needed
-#but in case of espresso the rdfs are calculated seperately
-for_all non-bonded do_external rdf $sim_prog
-for_all non-bonded do_external update ibi_single
+[[ -z $1 || -z $2 ]] && die "${0##*/}: Missing arguments"
+
+[[ -f $2 ]] && die "${0##*/}: $2 is already there"
+
+name=$(csg_get_interaction_property name)
+avg_points=$(csg_get_interaction_property inverse.post_update_options.extrapolate.points 5)
+
+echo "extrapolate potential for interaction $name"
+
+tabtype="$(csg_get_interaction_property bondtype)"
+[[ $(csg_get_property cg.inverse.method) = "tf" ]] && tabtype="thermforce"
+
+do_external table extrapolate --type "$tabtype" --avg-points "$avg_points" "$1" "$2"
+
