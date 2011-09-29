@@ -45,7 +45,7 @@ if [ $adress_type = "sphere" ]; then
 else
   outfile="${name}.sym.dens"
   adressc="$(get_simulation_setting adress_reference_coords "0")"
-  ref="$(echo "$adressc" | awk '{if (NF<1) exit 1; print "$1";}')" || die "${0##*/}: we need at least one number in adress_reference_coords, but got '$adressc'"
+  ref="$(echo "$adressc" | awk '{if (NF<1) exit 1; print $1;}')" || die "${0##*/}: we need at least one number in adress_reference_coords, but got '$adressc'"
   critical do_external density symmetrize --infile "$infile" --outfile "$outfile" --adressc "$ref"
   infile="${outfile}"
 fi
@@ -65,19 +65,24 @@ bigger="${name}.extended.dens"
 critical csg_resample --type cubic --in "$infile" --out "$bigger" --grid "$sp_min:$step:$sp_max" --comment "$comment"
 
 #calculate derivative of the density using csg_resample on a spline grid
-forcefile="tf_${name}"
+forcefile="${name}.tf"
 smooth="${name}.smooth.dens"
 critical csg_resample --type cubic --in "$bigger" --out "$smooth" --grid "$sp_min:$step:$sp_max" --derivative "$forcefile" --fitgrid "$sp_min:$sp_step:$sp_max" --comment "$comment"
 
 #multiply the prefactor on
 prefactor="$(csg_get_interaction_property tf.prefactor)"
+forcefile_pref="${name}.tf_with_prefactor"
 cg_prefactor="$(csg_get_interaction_property --allow-empty tf.cg_prefactor)"
-[ -z "$cg_prefactor" ] && echo "Using fixed prefactor $prefactor" || echo "Using linear interpolation of prefactors. Ex. pref: $prefactor CG. pref : $cg_prefactor"
-forcefile_pref="tf_with_prefactor_${name}"
-do_external tf apply_prefactor $forcefile $forcefile_pref $prefactor $cg_prefactor
+if [[ -z $cg_prefactor ]]; then 
+  echo "Using fixed prefactor $prefactor" 
+  do_external table linearop "$forcefile" "${forcefile_pref}" "${prefactor}" 0.0
+else
+  echo "Using linear interpolation of prefactors between $prefactor and $cg_prefactor"
+  do_external table scale "$forcefile" "$forcefile_pref" "$prefactor" "$cg_prefactor"
+fi
 
 #cut it down to the range min to max
-forcefile_smooth="tf_smooth_${name}"
+forcefile_smooth="${name}.tf_smooth"
 do_external table smooth_borders --infile "$forcefile_pref" --outfile "$forcefile_smooth" --xstart "$min" --xstop "$max"
 
 #integrate the force table
