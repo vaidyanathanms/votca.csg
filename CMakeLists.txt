@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.6)
 
 project(votca-csg)
 
-set(PROJECT_VERSION "1.2.1")
+set(PROJECT_VERSION "1.3-dev")
 set(PROJECT_CONTACT "bugs@votca.org")
 string(REGEX REPLACE "^[1-9]+\\.([1-9]+).*$" "\\1" SOVERSION "${PROJECT_VERSION}")
 if (NOT ${SOVERSION} MATCHES "[1-9]+")
@@ -46,7 +46,13 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 ########################################################################
 #Find external packages
 ########################################################################
-find_package(TXT2TAGS)
+option(BUILD_MANPAGES "Build manpages" ON)
+if (BUILD_MANPAGES)
+  find_package(TXT2TAGS)
+else (BUILD_MANPAGES)
+  set(TXT2TAGS_FOUND)
+endif (BUILD_MANPAGES)
+
 option(EXTERNAL_BOOST "Use external boost" ON)
 if (EXTERNAL_BOOST)
   find_package(Boost 1.39.0 COMPONENTS program_options )
