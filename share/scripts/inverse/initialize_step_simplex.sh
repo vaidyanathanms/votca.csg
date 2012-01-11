@@ -1,3 +1,4 @@
+#! /bin/bash
 #
 # Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
@@ -13,5 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-setenv CSGSHARE "@CMAKE_INSTALL_PREFIX@/@DATA@"
 
+if [ "$1" = "--help" ]; then
+cat <<EOF
+${0##*/}, version %version%
+This script implements the initialization for every step in a generic way
+
+Usage: ${0##*/}
+EOF
+   exit 0
+fi
+
+sim_prog="$(csg_get_property cg.inverse.program)"
+
+#get new pot from last step and make it current potential
+for_all "non-bonded bonded" 'cp_from_last_step --rename $(csg_get_interaction_property name).pot.new $(csg_get_interaction_property name).pot.cur'
+
+cp_from_last_step --rename "simplex.state.new" "simplex.state.cur"
+
+#initialize sim_prog
+do_external initstep_generic $sim_prog

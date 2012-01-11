@@ -15,15 +15,55 @@
 # limitations under the License.
 #
 
-if [[ $1 = "--help" ]]; then
-cat <<EOF
+show_help () {
+  cat <<EOF
 ${0##*/}, version %version%
 This script is a wrapper to convert a potential to gromacs
 
-Usage: ${0##*/} [input] [output]
+Usage: ${0##*/} [options] input output
+
+Allowed options:
+    --help       show this help
+    --clean      remove all intermediate temp files
+    --r2d        converts rad to degree (scale x axis with 180/3.1415)
+                 Note: VOTCA calcs in rad, but gromacs in degree
+    --no-shift   do not shift the potential
 EOF
-  exit 0
-fi
+}
+
+clean="no"
+do_shift="yes"
+xscale=1
+
+### begin parsing options
+shopt -s extglob
+while [[ ${1#-} != $1 ]]; do
+ if [[ ${1#--} = $1 && -n ${1:2} ]]; then
+    #short opt with arguments here: o
+    if [[ ${1#-[o]} != ${1} ]]; then
+       set -- "${1:0:2}" "${1:2}" "${@:2}"
+    else
+       set -- "${1:0:2}" "-${1:2}" "${@:2}"
+    fi
+ fi
+ case $1 in
+   --r2d)
+    xscale="57.2957795"
+    shift ;;
+   --clean)
+    clean="yes"
+    shift ;;
+   --no-shift)
+    do_shift="no"
+    shift ;;
+   -h | --help)
+    show_help
+    exit 0;;
+  *)
+   die "Unknown option '$1'";;
+ esac
+done
+### end parsing options
 
 if [[ -n $1 ]]; then
   name="${1%%.*}"
@@ -44,14 +84,15 @@ fi
 
 echo "Convert $input to $output"
 
-zero=0
-tabtype="$(csg_get_interaction_property bondtype)"
-#do this with --allow-empty to avoid stoping if calling from csg_call
-[[ $(csg_get_property --allow-empty cg.inverse.method) = "tf" ]] && tabtype="thermforce"
 
-if [[ $tabtype = "non-bonded" || $tabtype = "C6" || $tabtype = "C12" ]]; then
+#special if calling from csg_call
+xvgtype="$(csg_get_interaction_property bondtype)"
+[[ $xvgtype = "C6" || $xvgtype = "C12" || $xvgtype = "CB" ]] && tabtype="non-bonded" || tabtype="$xvgtype"
+
+zero=0
+if [[ $tabtype = "non-bonded" ]]; then
   tablend="$(csg_get_property --allow-empty cg.inverse.gromacs.table_end)"
-  mdp="$(csg_get_property cg.inverse.gromacs.mdp "grompp.mdp")"
+  mdp="$(csg_get_property cg.inverse.gromacs.mdp)"
   if [[ -f ${mdp} ]]; then
     echo "Found setting file '$mdp' now trying to check options in there"
     rlist=$(get_simulation_setting rlist)
@@ -64,37 +105,52 @@ if [[ $tabtype = "non-bonded" || $tabtype = "C6" || $tabtype = "C12" ]]; then
   elif [[ -z $tablend ]]; then
     die "${0##*/}: cg.inverse.gromacs.table_end was not defined in xml seeting file"
   fi
-elif [[ $tabtype = "bonded" || $tabtype = "thermforce" ]]; then
+elif [[ $tabtype = "bond" || $tabtype = "thermforce" ]]; then
   tablend="$(csg_get_property cg.inverse.gromacs.table_end)"
 elif [[ $tabtype = "angle" ]]; then
   tablend=180
 elif [[ $tabtype = "dihedral" ]]; then
   zero="-180"
   tablend=180
+else
+  die "${0##*/}: Unknown interaction type $tabtype"
 fi
 
 gromacs_bins="$(csg_get_property cg.inverse.gromacs.table_bins)"
 comment="$(get_table_comment $input)"
 
-smooth="$(critical mktemp ${name}.pot.smooth.XXXXX)"
-critical csg_resample --in ${input} --out "$smooth" --grid "${zero}:${gromacs_bins}:${tablend}" --comment "$comment"
-extrapol="$(critical mktemp ${name}.pot.extrapol.XXXXX)"
-
-tshift="$(critical mktemp ${name}.pot.shift.XXXXX)"
-if [[ $tabtype = "non-bonded" || $tabtype = "C6" || $tabtype = "C12" ]]; then
-  extrapol1="$(critical mktemp ${name}.pot.extrapol2.XXXXX)"
-  do_external table extrapolate --function exponential --avgpoints 5 --region left "${smooth}" "${extrapol1}"
-  do_external table extrapolate --function constant --avgpoints 1 --region right "${extrapol1}" "${extrapol}"
-  do_external pot shift_nonbonded "${extrapol}" "${tshift}"
-elif [[ $tabtype = "thermforce" ]]; then
-  do_external table extrapolate --function constant --avgpoints 5 --region leftright "${smooth}" "${extrapol}"
-  do_external pot shift_bonded "${extrapol}" "${tshift}"
+if [[ $tabtype = "angle" || $tabtype = "dihedral" ]] && [[ $xscale != 1 ]]; then
+  scale="$(critical mktemp ${name}.pot.scale.XXXXX)"
+  do_external table linearop --on-x "${input}" "${scale}" "$xscale" "0"
 else
-  do_external table extrapolate --function exponential --avgpoints 5 --region leftright "${smooth}" "${extrapol}"
-  do_external pot shift_bonded "${extrapol}" "${tshift}"
+  scale="${input}"
+fi
+
+smooth="$(critical mktemp ${name}.pot.smooth.XXXXX)"
+critical csg_resample --in ${scale} --out "$smooth" --grid "${zero}:${gromacs_bins}:${tablend}" --comment "$comment"
+
+extrapol="$(critical mktemp ${name}.pot.extrapol.XXXXX)"
+if [[ $clean = "yes" ]]; then
+  do_external potential extrapolate --clean --type "$tabtype" "${smooth}" "${extrapol}"
+else
+  do_external potential extrapolate --type "$tabtype" "${smooth}" "${extrapol}"
+fi
+
+if [[ $do_shift = "yes" ]]; then
+  tshift="$(critical mktemp ${name}.pot.shift.XXXXX)"
+  if [[ $tabtype = "non-bonded" || $tabtype = "thermforce" ]]; then
+    do_external pot shift_nonbonded "${extrapol}" "${tshift}"
+  else
+    do_external pot shift_bonded "${extrapol}" "${tshift}"
+  fi
+else
+  tshift="$extrapol"
 fi
 
 potmax="$(csg_get_property --allow-empty cg.inverse.gromacs.pot_max)"
 [[ -n ${potmax} ]] && potmax="--max ${potmax}"
 
-do_external convert_potential xvg ${potmax} --type "${tabtype}" "${tshift}" "${output}"
+do_external convert_potential xvg ${potmax} --type "${xvgtype}" "${tshift}" "${output}"
+if [[ $clean = "yes" ]]; then
+  rm -f "${smooth}" "${extrapol}" "${tshift}" "${extrapol1}"
+fi

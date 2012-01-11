@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.6)
 
 project(votca-csg)
 
-set(PROJECT_VERSION "1.2.2")
+set(PROJECT_VERSION "1.3-dev")
 set(PROJECT_CONTACT "bugs@votca.org")
 string(REGEX REPLACE "^[1-9]+\\.([1-9]+).*$" "\\1" SOVERSION "${PROJECT_VERSION}")
 if (NOT ${SOVERSION} MATCHES "[1-9]+")
@@ -46,7 +46,13 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 ########################################################################
 #Find external packages
 ########################################################################
-find_package(TXT2TAGS)
+option(BUILD_MANPAGES "Build manpages" ON)
+if (BUILD_MANPAGES)
+  find_package(TXT2TAGS)
+else (BUILD_MANPAGES)
+  set(TXT2TAGS_FOUND)
+endif (BUILD_MANPAGES)
+
 option(EXTERNAL_BOOST "Use external boost" ON)
 if (EXTERNAL_BOOST)
   find_package(Boost 1.39.0 COMPONENTS program_options )
@@ -108,17 +114,6 @@ add_subdirectory(scripts)
 add_subdirectory(src)
 add_subdirectory(include/votca/csg)
 add_subdirectory(share)
-
-if (TXT2TAGS_FOUND)
-  add_custom_command(OUTPUT CHANGELOG
-    COMMAND ${TXT2TAGS_EXECUTABLE} -q -t txt -i ${CMAKE_CURRENT_SOURCE_DIR}/share/CHANGELOG.t2t -o CHANGELOG
-    COMMENT "Building CHANGELOG using txt2tags")
-else (TXT2TAGS_FOUND)
-  add_custom_command(OUTPUT CHANGELOG
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/share/CHANGELOG.t2t CHANGELOG 
-    COMMENT "Building CHANGELOG using copy")
-endif (TXT2TAGS_FOUND)
-add_custom_target(changelog ALL DEPENDS CHANGELOG)
 
 configure_file(${CMAKE_MODULE_PATH}/cmake_uninstall.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake IMMEDIATE @ONLY)
 add_custom_target(uninstall COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
