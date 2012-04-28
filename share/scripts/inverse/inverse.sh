@@ -277,7 +277,7 @@ for ((i=$begin;i<$iterations+1;i++)); do
     if [[ -f stop ]]; then
       msg "Iterations are converged, stopping"
       touch "done"
-      exit 0
+      break
     else
       msg "Iterations are not converged, going on"
     fi
@@ -304,6 +304,9 @@ for ((i=$begin;i<$iterations+1;i++)); do
   fi
   cd $(get_main_dir) || die "cd $(get_main_dir) failed"
 done
+
+msg "Post done"
+do_external post_done $method
 
 touch "done"
 echo "All done at $(date)"
