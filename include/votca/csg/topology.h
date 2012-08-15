@@ -62,7 +62,10 @@ class Topology
 {
 public:
     /// constructor
-    Topology() {  _bc = new OpenBox(); }
+    Topology() {
+        _bc = new OpenBox();
+        _has_vel=false;
+    }
     virtual ~Topology();
     
     /**
@@ -168,6 +171,12 @@ public:
      * @return bead container
      */
     BeadContainer &Beads() { return _beads; }
+
+    /**
+     * access containter with all residues
+     * @return bead container
+     */
+    ResidueContainer &Residues() { return _residues; }
 
     /**
      * access  containter with all molecules
@@ -330,6 +339,12 @@ public:
 
     void InsertExclusion(int i, list<int> l);
 
+    bool HasVel(){return _has_vel;}
+    void SetHasVel(const bool v){ _has_vel=v;}
+
+    bool HasForce(){return _has_force;}
+    void SetHasForce(const bool v){ _has_force=v;}
+
 protected:
     BoundaryCondition *_bc;
 
@@ -359,6 +374,8 @@ protected:
     
     double _time;
     int _step;
+    bool _has_vel;
+    bool _has_force;
 };
 
 inline Bead *Topology::CreateBead(byte_t symmetry, string name, BeadType *type, int resnr, double m, double q)

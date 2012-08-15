@@ -25,10 +25,10 @@ EOF
    exit 0
 fi
 
-from=$(csg_get_property cg.inverse.initial_configuration "laststep")
-esp="$(csg_get_property cg.inverse.espresso.blockfile "conf.esp.gz")"
+from=$(csg_get_property cg.inverse.initial_configuration)
+esp="$(csg_get_property cg.inverse.espresso.blockfile)"
 if [[ $from = "laststep" ]]; then
-  espout="$(csg_get_property cg.inverse.espresso.blockfile_out "confout.esp.gz")"
+  espout="$(csg_get_property cg.inverse.espresso.blockfile_out)"
   #avoid overwriting $espout
   cp_from_last_step --rename "$espout" "$esp"
 elif [[ $from = "maindir" ]]; then
@@ -38,4 +38,4 @@ else
 fi
 
 #convert potential in format for sim_prog
-for_all non-bonded do_external convert_potential espresso
+for_all "non-bonded bonded" do_external convert_potential espresso
