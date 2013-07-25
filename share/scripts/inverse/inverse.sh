@@ -44,7 +44,7 @@ if [[ $1 = "--help" ]]; then
 fi
 
 #do all start up checks option stuff
-source "${0%/*}/start_framework.sh"  || exit 1
+source "${VOTCASHARE}/scripts/inverse/start_framework.sh"  || exit 1
 
 #defaults for options
 do_iterations=""
@@ -67,14 +67,15 @@ while [[ ${1#-} != $1 ]]; do
  case $1 in
    --do-iterations)
     do_iterations="$2"
-    int_check "$do_iterations" "inverse.sh: --do-iterations need a number as agrument"
+    is_int "$do_iterations" || die "inverse.sh: --do-iterations need a number as argument, but I got $do_iterations"
     shift 2 ;;
    --wall-time)
-    int_check "$2" "inverse.sh: --wall-time need a number as agrument"
+    is_int "$2" || die "inverse.sh: --wall-time need a number as argument, but I got $2"
     export CSGENDING=$(( $(get_time) + $2 ))
     shift 2 ;;
    -[0-9]*)
     do_iterations=${1#-}
+    is_int "$do_iterations" || die "inverse.sh: $1 need a number in its argument, but I got $do_iterations"
     shift ;;
    --options)
     CSGXMLFILE="$2"
@@ -118,9 +119,9 @@ echo "We are using Sim Program: $sim_prog"
 source_function $sim_prog
 
 iterations_max="$(csg_get_property cg.inverse.iterations_max)"
-int_check "$iterations_max" "inverse.sh: cg.inverse.iterations_max needs to be a number"
+is_int "$iterations_max" || die "inverse.sh: cg.inverse.iterations_max needs to be a number, but I got $iterations_max"
 echo "We are doing $iterations_max iterations (0=inf)."
-convergence_check="$(csg_get_property cg.inverse.convergence_check "none")"
+convergence_check="$(csg_get_property cg.inverse.convergence_check.type)"
 [[ $convergence_check = none ]] || echo "After every iteration we will do the following check: $convergence_check"
 
 filelist="$(csg_get_property --allow-empty cg.inverse.filelist)"
@@ -159,6 +160,9 @@ else
   if is_done "Prepare"; then
     msg "Prepare of potentials already done"
   else
+    #get need files (leave the " " unglob happens inside the function)
+    cp_from_main_dir "$filelist"
+
     do_external prepare $method
     mark_done "Prepare"
   fi
@@ -187,7 +191,7 @@ avg_steptime=0
 steps_done=0
 [[ $iterations_max -eq 0 ]] && iterations=$begin || iterations=$iterations_max
 for ((i=$begin;i<$iterations+1;i++)); do
-  [ $iterations_max -eq 0 ] && ((iterations++))
+  [[ $iterations_max -eq 0 ]] && ((iterations++))
   step_starttime="$(get_time)"
   update_stepnames $i
   last_dir=$(get_last_step_dir)
@@ -211,12 +215,23 @@ for ((i=$begin;i<$iterations+1;i++)); do
   cd $this_dir || die "cd $this_dir failed"
   mark_done "stepdir"
 
+  if is_done "Filecopy"; then
+    echo "Filecopy already done"
+    for i in $filelist; do
+      echo Comparing "$(get_main_dir)/$i" "$i"
+      cmp "$(get_main_dir)/$i" "$i" && echo "Unchanged" || \
+	msg --color blue "file '$i' in the main dir was changed since the last execution, this will have no effect on current iteration, to take effect remove the current iteration ('${this_dir##*/}')"
+    done
+  else
+    #get need files (leave the " " unglob happens inside the function)
+    cp_from_main_dir "$filelist"
+
+    mark_done "Filecopy"
+  fi
+
   if is_done "Initialize"; then
     echo "Initialization already done"
   else
-    #get need files
-    cp_from_main_dir "$filelist"
-
     #get files from last step, init sim_prog and ...
     do_external initstep $method
 
@@ -232,11 +247,11 @@ for ((i=$begin;i<$iterations+1;i++)); do
 
   if simulation_finish; then
     mark_done "Simulation"
-  elif [ "$(csg_get_property cg.inverse.simulation.background "no")" = "yes" ]; then
+  elif [[ "$(csg_get_property cg.inverse.simulation.background)" = "yes" ]]; then
     msg "Simulation is suppose to run in background, which we cannot check."
     msg "Stopping now, resume csg_inverse whenever the simulation is done."
     exit 0
-  elif checkpoint_exist; then
+  elif [[ -n ${CSGENDING} ]] && checkpoint_exist; then
     msg "Simulation is not finished, but a checkpoint was found, so it seems"
     msg "walltime is nearly up, stopping now, resume csg_inverse whenever you want."
     exit 0
@@ -244,23 +259,19 @@ for ((i=$begin;i<$iterations+1;i++)); do
     die "Simulation is in a strange state, it has no checkpoint and is not finished, check ${this_dir##*/} by hand"
   fi
 
-  msg "Make update"
+  msg "Make update for $method"
   do_external update $method
 
-  msg "Post update"
   do_external post_update $method
-
-  msg "Adding up potential"
   do_external add_pot $method
 
   msg "Post add"
   do_external post add
 
-  msg "Clean up"
-  for cleanfile in ${cleanlist}; do
-    rm -f $cleanfile
-  done
-  unset cleanfile
+  if [[ -n ${cleanlist} ]]; then
+    msg "Clean up"
+    rm -f ${cleanlist}
+  fi
 
   step_time="$(( $(get_time) - $step_starttime ))"
   msg "\nstep $i done, needed $step_time secs"
@@ -272,12 +283,11 @@ for ((i=$begin;i<$iterations+1;i++)); do
     echo "No convergence check to be done"
   else
     msg "Doing convergence check: $convergence_check"
-    [[ -f stop ]] && rm -f stop
+    [[ -f stop ]] && rm -f stop #just in case a script created a stop file
     do_external convergence_check "$convergence_check"
     if [[ -f stop ]]; then
       msg "Iterations are converged, stopping"
-      touch "done"
-      exit 0
+      break
     else
       msg "Iterations are not converged, going on"
     fi
@@ -287,10 +297,10 @@ for ((i=$begin;i<$iterations+1;i++)); do
     avg_steptime="$(( ( ( $steps_done-1 ) * $avg_steptime + $step_time ) / $steps_done + 1 ))"
     echo "New average steptime $avg_steptime"
     if [[ $(( $(get_time) + $avg_steptime )) -gt ${CSGENDING} ]]; then
-      msg "We will not manage another step, stopping"
+      msg "We will not manage another step due to walltime, stopping"
       exit 0
     else
-      msg "We can go for another $(( ( ${CSGENDING} - $(get_time) ) / $avg_steptime - 1 )) steps"
+      msg "We can go for another $(( ( ${CSGENDING} - $(get_time) ) / $avg_steptime - 1 )) steps until walltime is up."
     fi
   fi
 
