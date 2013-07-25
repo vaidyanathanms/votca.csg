@@ -1,4 +1,4 @@
-#!/bin/bash
+#! /bin/bash
 #
 # Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
 #
@@ -18,23 +18,21 @@
 if [ "$1" = "--help" ]; then
 cat <<EOF
 ${0##*/}, version %version%
-This script is a wrapper to convert a potential to espresso
+This script implements the preparation of the relative entropy method iteration
 
 Usage: ${0##*/}
 EOF
-  exit 0
+   exit 0
 fi
 
-name=$(csg_get_interaction_property name)
-input="${name}.pot.cur"
 
-output="$(csg_get_interaction_property inverse.espresso.table)"
-echo "Convert $input to $output"
+# get initial parameters from main dir and make it current parameters
+for_all non-bonded 'cp_from_main_dir --rename $(csg_get_interaction_property name).param.init $(csg_get_interaction_property name).param.new'
 
-r_cut=$(csg_get_interaction_property max)
-espresso_bins="$(csg_get_property cg.inverse.espresso.table_bins)"
+sim_prog="$(csg_get_property cg.inverse.program)"
+#cp confout.gro and so on
+do_external prepare_generic $sim_prog
 
-comment="$(get_table_comment)"
-
-critical csg_resample --in ${input} --out smooth_${input} --der smooth_dpot_${input} --grid 0:${espresso_bins}:${r_cut} --comment "$comment"
-do_external convert_potential tab smooth_${input} smooth_dpot_${input} ${output}
+# run csg_reupdate to generate intital potential tables
+msg --color green "Generating potential tables from the initial parameters"
+critical csg_reupdate --gentable true --param-in-ext param.new --options $CSGXMLFILE 

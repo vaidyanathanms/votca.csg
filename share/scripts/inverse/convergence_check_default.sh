@@ -18,19 +18,27 @@
 if [[ $1 = "--help" ]]; then
 cat <<EOF
 ${0##*/}, version %version%
-dummy script (does nothing), useful to overwrite default by nothing
+Calculated the sum of all convergence files and create a file 'stop' if the sum is bigger than a given limit
 
 Usage: ${0##*/}
 EOF
    exit 0
 fi
 
-limit="$(csg_get_property cg.inverse.convergence_check_options.limit)"
-glob="$(csg_get_property cg.inverse.convergence_check_options.name_glob "*.conv")"
+limit="$(csg_get_property cg.inverse.convergence_check.limit)"
 
-sum="$(for i in $glob; do
-    [[ -f $i ]] || die "${0##*/}: File '$i' not found!\nHave you added convergence to the postadd list of at least one interaction?"
-    cat $i 
-done | awk 'BEGIN{sum=0}{sum+=$1}END{print sum}')" || die "${0##*/}: Calculation of the convergence sum failed"
+sum=0
+names="$(csg_get_interaction_property --all name)"
+found=0
+for name in $names; do
+  out="${name}.conv"
+  [[ -f $out ]] || continue
+  ((found++))
+  val="$(<$out)"
+  is_num "$val" || die "${0##*/}: Content of $i was not a number"
+  sum=$(csg_calc "$sum" + "$val")
+done
+[[ $found -eq 0 ]] && die "${0##*/}: No convergence file found!\nHave you added convergence to the postadd list of at least one interaction?"
+
 echo "Convergence sum was $sum, limit is $limit"
 csg_calc "$sum" ">" "$limit" || touch 'stop'
