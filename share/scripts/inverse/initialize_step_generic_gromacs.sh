@@ -27,10 +27,11 @@ EOF
   exit 0
 fi
 
-from="$(csg_get_property cg.inverse.initial_configuration "laststep")"
-conf="$(csg_get_property cg.inverse.gromacs.conf "conf.gro")"
+from="$(csg_get_property cg.inverse.initial_configuration)"
+conf="$(csg_get_property cg.inverse.gromacs.conf)"
+echo "Using intial configuration from $from"
 if [[ $from = "laststep" ]]; then
-  confout="$(csg_get_property cg.inverse.gromacs.conf_out "confout.gro")"
+  confout="$(csg_get_property cg.inverse.gromacs.conf_out)"
   #avoid overwriting $confout
   cp_from_last_step --rename "${confout}" "${conf}"
 elif [[ $from = "maindir" ]]; then
@@ -40,7 +41,7 @@ else
 fi
 
 #convert potential in format for sim_prog
-for_all non-bonded do_external convert_potential gromacs
+for_all "non-bonded bonded" do_external convert_potential gromacs --r2d '$(csg_get_interaction_property name).pot.cur $(csg_get_interaction_property inverse.gromacs.table)'
 
 check_temp || die "${0##*/}: check of tempertures failed"
 
