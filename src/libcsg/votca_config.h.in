@@ -1,0 +1,10 @@
+/* Used gromacs version */
+#cmakedefine GMX @GMX@
+
+#cmakedefine DLPOLY @DLPOLY@
+
+/* Version number of package */
+#define VERSION "@PROJECT_VERSION@"
+
+/* Contact address of package */
+#define PACKAGE_BUGREPORT "@PROJECT_CONTACT@"
