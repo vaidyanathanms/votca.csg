@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright 2009-2011 The VOTCA Development Team (http://www.votca.org)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
  *
  */
 
-#ifndef __VOTCA_CSG_XYZREADER_H
-#define	__VOTCA_CSG_XYZREADER_H
+#ifndef _VOTCA_CSG_GROREADER_H
+#define	_VOTCA_CSG_GROREADER_H
 
 #include <string>
 #include <iostream>
@@ -28,20 +28,20 @@ namespace votca { namespace csg {
 using namespace votca::tools;
 
 using namespace std;
-
+    
 /**
-    \brief class for reading xyz files
+    \brief reader for gro files
 
     This class provides the TrajectoryReader + Topology reader interface
-    for xyz files
+    for gro files
 
 */
-class XYZReader :
+class GROReader :
     public TrajectoryReader, public TopologyReader
 {
     public:
-        XYZReader() {}
-        ~XYZReader() {}
+        GROReader() {}
+        ~GROReader() {}
 
         /// open a topology file
         bool ReadTopology(string file, Topology &top);
@@ -58,12 +58,9 @@ class XYZReader :
     private:
         ifstream _fl;
         bool _topology;
-        int _natoms;
-
-        int _line;
 };
 
 }}
 
-#endif
+#endif	/* _VOTCA_CSG_GROREADER_H */
 
